@@ -42,7 +42,7 @@ app.use((req, res, next) => {
 
 // ✅ CORS Configuration (Fixed)
 const allowedOrigins = [
-  "https://irt-university-frontend.vercel.app",
+  "https://irt-university-frontend-fm6m-ol3pnrf5v-hamids-projects-e0694705.vercel.app/",
   "http://localhost:3000",
 ];
 
