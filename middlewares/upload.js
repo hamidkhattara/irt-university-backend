@@ -1,49 +1,57 @@
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 
-// Define storage config
+// Ensure uploads directory exists
+const uploadDir = 'uploads/';
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Define storage configuration
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/'); // Folder to save uploaded files
+    cb(null, uploadDir);
   },
   filename: function (req, file, cb) {
-    const uniqueName = Date.now() + '-' + path.parse(file.originalname).name + path.extname(file.originalname).toLowerCase();
+    const uniqueName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9-_\.]/g, '')}`;
     cb(null, uniqueName);
   },
 });
 
-// Filter file types (images and PDFs)
+// File filter function for images and PDFs
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png|webp|pdf/i;
   const extname = path.extname(file.originalname).toLowerCase();
-  
-  // Check extension first
-  if (!allowedTypes.test(extname)) {
-    return cb(new Error('Only image (jpeg, jpg, png, webp) and PDF files are allowed!'), false);
-  }
+  const isImage = file.mimetype.startsWith('image/');
+  const isPDF = file.mimetype.startsWith('application/pdf');
 
-  // Then check MIME type more flexibly
-  if (extname === '.pdf') {
-    if (!file.mimetype.startsWith('application/pdf') && !file.mimetype.startsWith('application/x-pdf')) {
-      return cb(new Error('Invalid PDF file type!'), false);
-    }
-  } else { // It's an image
-    if (!file.mimetype.startsWith('image/')) {
-      return cb(new Error('Invalid image file type!'), false);
-    }
+  if ((isImage && ['.jpeg', '.jpg', '.png', '.webp'].includes(extname)) || (isPDF && extname === '.pdf')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only one image (jpeg, jpg, png, webp) and one PDF file are allowed!'), false);
   }
-
-  cb(null, true);
 };
 
-// Export multer middleware
+// Multer configuration for exactly one image and one PDF
 const upload = multer({
   storage,
   fileFilter,
-  limits: { 
-    fileSize: 10 * 1024 * 1024, // 10MB file size limit
-    files: 1 // If you want to limit number of files
-  },
-});
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit per file
+}).fields([
+  { name: 'image', maxCount: 1 },  // Only 1 image
+  { name: 'pdf', maxCount: 1 }     // Only 1 PDF
+]);
 
-module.exports = upload;
+// Middleware to handle errors properly
+const uploadMiddleware = (req, res, next) => {
+  upload(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ error: err.message });
+    } else if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  });
+};
+
+module.exports = uploadMiddleware;
