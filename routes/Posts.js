@@ -15,8 +15,10 @@ router.post('/', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'pdf', m
       return res.status(400).json({ error: 'Please provide either an image or a video.' });
     }
 
-    const imageUrl = imageFile ? `${req.protocol}://${req.get('host')}/uploads/${imageFile.filename}` : '';
-    const pdfUrl = pdfFile ? `${req.protocol}://${req.get('host')}/uploads/${pdfFile.filename}` : '';
+    const protocol = req.secure ? 'https' : 'http';
+    const imageUrl = imageFile ? `${protocol}://${req.get('host')}/uploads/${imageFile.filename}` : '';
+    const pdfUrl = pdfFile ? `${protocol}://${req.get('host')}/uploads/${pdfFile.filename}` : '';
+    
 
     const newPost = new Post({
       title,
