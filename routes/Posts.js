@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const upload = require('../middlewares/upload');
+const { upload } = require('../middlewares/upload');
 const Post = require('../models/Post');
 
 // Create a new post
