@@ -59,10 +59,15 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve static uploads
-const uploadsPath = path.join(__dirname, 'uploads');
-app.use('/uploads', express.static(uploadsPath));
-console.log('📂 Serving uploaded files from:', uploadsPath);
+// Force HTTPS for uploaded files
+app.use('/uploads', (req, res, next) => {
+  if (req.headers['x-forwarded-proto'] !== 'https' && process.env.NODE_ENV === 'production') {
+    return res.redirect(`https://${req.get('host')}${req.url}`);
+  }
+  next();
+}, express.static(path.join(__dirname, 'uploads')));
+
+console.log('📂 Serving uploaded files from:', path.join(__dirname, 'uploads'));
 
 // Routes
 const authRoutes = require('./routes/auth');
