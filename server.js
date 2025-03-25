@@ -24,10 +24,22 @@ connectDB()
 
 // Initialize Express app
 const app = express();
+app.use((req, res, next) => {
+  if (req.headers['x-forwarded-proto'] !== 'https' && process.env.NODE_ENV === 'production') {
+    return res.redirect(`https://${req.headers.host}${req.url}`);
+  }
+  next();
+});
 
 // Middleware
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin: [
+    'https://irt-university-frontend-fm6m-f4qorwf47-hamids-projects-e0694705.vercel.app',
+    'http://localhost:3000'
+  ],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true
+}));app.use(express.json());
 
 // Serve static uploads
 const uploadsPath = path.join(__dirname, 'uploads');

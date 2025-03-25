@@ -7,46 +7,43 @@ const storage = multer.diskStorage({
     cb(null, 'uploads/'); // Folder to save uploaded files
   },
   filename: function (req, file, cb) {
-    const uniqueName = Date.now() + '-' + file.originalname;
+    const uniqueName = Date.now() + '-' + path.parse(file.originalname).name + path.extname(file.originalname).toLowerCase();
     cb(null, uniqueName);
   },
 });
 
 // Filter file types (images and PDFs)
 const fileFilter = (req, file, cb) => {
-  const allowedImageTypes = /jpeg|jpg|png|webp/;
-  const allowedPdfTypes = /pdf/;
-
+  const allowedTypes = /jpeg|jpg|png|webp|pdf/i;
   const extname = path.extname(file.originalname).toLowerCase();
-  const mimetype = file.mimetype;
+  
+  // Check extension first
+  if (!allowedTypes.test(extname)) {
+    return cb(new Error('Only image (jpeg, jpg, png, webp) and PDF files are allowed!'), false);
+  }
 
-  // Check if the file is an image
-  if (allowedImageTypes.test(extname)) {
-    if (allowedImageTypes.test(mimetype)) {
-      cb(null, true); // Accept the file
-    } else {
-      cb(new Error('Invalid image file type!'), false);
+  // Then check MIME type more flexibly
+  if (extname === '.pdf') {
+    if (!file.mimetype.startsWith('application/pdf') && !file.mimetype.startsWith('application/x-pdf')) {
+      return cb(new Error('Invalid PDF file type!'), false);
+    }
+  } else { // It's an image
+    if (!file.mimetype.startsWith('image/')) {
+      return cb(new Error('Invalid image file type!'), false);
     }
   }
-  // Check if the file is a PDF
-  else if (allowedPdfTypes.test(extname)) {
-    if (allowedPdfTypes.test(mimetype)) {
-      cb(null, true); // Accept the file
-    } else {
-      cb(new Error('Invalid PDF file type!'), false);
-    }
-  }
-  // Reject all other file types
-  else {
-    cb(new Error('Only image (jpeg, jpg, png, webp) and PDF files are allowed!'), false);
-  }
+
+  cb(null, true);
 };
 
 // Export multer middleware
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB file size limit
+  limits: { 
+    fileSize: 10 * 1024 * 1024, // 10MB file size limit
+    files: 1 // If you want to limit number of files
+  },
 });
 
 module.exports = upload;
