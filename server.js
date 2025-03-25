@@ -26,6 +26,8 @@ connectDB()
 // Initialize Express app
 const app = express();
 
+app.set('trust proxy', 1); // ✅ Fix for express-rate-limit
+
 // Security Middleware
 app.use(helmet());
 app.disable('x-powered-by');
