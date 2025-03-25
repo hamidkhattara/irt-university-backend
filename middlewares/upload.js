@@ -32,26 +32,11 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Multer configuration for exactly one image and one PDF
+// Create and export the multer instance (DO NOT CALL .fields() HERE)
 const upload = multer({
   storage,
   fileFilter,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit per file
-}).fields([
-  { name: 'image', maxCount: 1 },  // Only 1 image
-  { name: 'pdf', maxCount: 1 }     // Only 1 PDF
-]);
-
-// Middleware to handle errors properly
-const uploadMiddleware = (req, res, next) => {
-  upload(req, res, (err) => {
-    if (err instanceof multer.MulterError) {
-      return res.status(400).json({ error: err.message });
-    } else if (err) {
-      return res.status(400).json({ error: err.message });
-    }
-    next();
-  });
-};
+});
 
 module.exports = upload;
