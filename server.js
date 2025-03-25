@@ -24,6 +24,8 @@ connectDB()
 
 // Initialize Express app
 const app = express();
+
+// Force HTTPS in production
 app.use((req, res, next) => {
   if (req.headers['x-forwarded-proto'] !== 'https' && process.env.NODE_ENV === 'production') {
     return res.redirect(`https://${req.headers.host}${req.url}`);
@@ -31,15 +33,31 @@ app.use((req, res, next) => {
   next();
 });
 
-// Middleware
+// CORS Configuration
+const allowedOrigins = [
+  'https://irt-university-frontend-fm6m-ol3pnrf5v-hamids-projects-e0694705.vercel.app',
+  'http://localhost:3000'
+];
+
 app.use(cors({
-  origin: [
-    'https://irt-university-frontend-fm6m-f4qorwf47-hamids-projects-e0694705.vercel.app',
-    'http://localhost:3000'
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
-}));app.use(express.json());
+}));
+
+// Handle preflight requests for all routes
+app.options('*', cors());
+
+// Middleware
+app.use(express.json());
+
+// Debugging middleware to log incoming requests
+app.use((req, res, next) => {
+  console.log('📡 Request received:', req.method, req.url);
+  console.log('🔎 Headers:', req.headers);
+  next();
+});
 
 // Serve static uploads
 const uploadsPath = path.join(__dirname, 'uploads');
@@ -62,8 +80,9 @@ app.use('/api/research', researchRoutes);
 app.use('/api/news-events', newsEventsRoutes);
 app.use('/api/contact', contactRoutes);
 
-// Catch-all route
+// Catch-all route for undefined API routes
 app.use((req, res) => {
+  console.log(`❌ 404 Error: ${req.method} ${req.url} not found`);
   res.status(404).json({ message: '❌ API route not found' });
 });
 
