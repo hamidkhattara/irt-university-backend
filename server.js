@@ -32,7 +32,7 @@ app.set("trust proxy", 1); // ✅ Fix for express-rate-limit
 app.use(helmet());
 app.disable("x-powered-by");
 
-// Force HTTPS in production
+// ✅ Force HTTPS in production
 app.use((req, res, next) => {
   if (req.headers["x-forwarded-proto"] !== "https" && process.env.NODE_ENV === "production") {
     return res.redirect(301, `https://${req.headers.host}${req.url}`);
@@ -40,47 +40,42 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ CORS Configuration (Fixed)
+// ✅ CORS Configuration (Final Fix)
 const allowedOrigins = [
-  "https://irt-university-frontend-fm6m-ol3pnrf5v-hamids-projects-e0694705.vercel.app/",
+  "https://irt-university-frontend-fm6m-ol3pnrf5v-hamids-projects-e0694705.vercel.app",
   "http://localhost:3000",
 ];
 
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        console.warn(`❌ CORS blocked: ${origin}`);
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-  })
-);
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`❌ CORS blocked: ${origin}`);
+      callback(new Error("CORS not allowed"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+};
 
-// Rate Limiting (Prevents DDoS attacks)
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // ✅ Handle Preflight Requests
+
+// ✅ Rate Limiting (Prevents DDoS attacks)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per window
 });
 app.use("/api/", limiter);
 
-// Middleware
+// ✅ Middleware
 app.use(express.json({ limit: "10mb" }));
 
-// Static Files (Uploads with HTTPS enforcement)
+// ✅ Static Files (Uploads without unnecessary redirects)
 app.use(
   "/uploads",
-  (req, res, next) => {
-    if (req.headers["x-forwarded-proto"] !== "https" && process.env.NODE_ENV === "production") {
-      return res.redirect(301, `https://${req.get("host")}${req.url}`);
-    }
-    next();
-  },
   express.static(path.join(__dirname, "uploads"), {
     setHeaders: (res) => {
       res.set("Cross-Origin-Resource-Policy", "cross-origin");
@@ -88,7 +83,7 @@ app.use(
   })
 );
 
-// Routes
+// ✅ Routes
 const authRoutes = require("./routes/auth");
 const postRoutes = require("./routes/Posts");
 const programRoutes = require("./routes/programRoutes");
@@ -103,18 +98,18 @@ app.use("/api/research", researchRoutes);
 app.use("/api/news-events", newsEventsRoutes);
 app.use("/api/contact", contactRoutes);
 
-// Health Check
+// ✅ Health Check
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "healthy" });
 });
 
-// Error Handling Middleware
+// ✅ Error Handling Middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  console.error("🔥 ERROR:", err.message);
   res.status(500).json({ error: "Internal Server Error" });
 });
 
-// Start Server
+// ✅ Start Server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
