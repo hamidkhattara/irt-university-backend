@@ -40,6 +40,7 @@ async function startServer() {
             "frame-ancestors": [
               "'self'",
               "https://irt-university-frontend-fm6m-ol3pnrf5v-hamids-projects-e0694705.vercel.app",
+              "https://irt-university-frontend-fm6m-qp4iejqk4-hamids-projects-e0694705.vercel.app",
               "http://localhost:3000",
             ],
           },
@@ -59,32 +60,58 @@ async function startServer() {
     });
 
     // ====================== CORS CONFIGURATION ======================
-    const allowedOrigins = [
-      "https://irt-university-frontend-fm6m-ol3pnrf5v-hamids-projects-e0694705.vercel.app",
-      "http://localhost:3000",
-    ];
+    const allowedOrigins = process.env.ALLOWED_ORIGINS 
+      ? process.env.ALLOWED_ORIGINS.split(',') 
+      : [
+          "https://irt-university-frontend-fm6m-ol3pnrf5v-hamids-projects-e0694705.vercel.app",
+          "https://irt-university-frontend-fm6m-qp4iejqk4-hamids-projects-e0694705.vercel.app",
+          "http://localhost:3000"
+        ];
 
     const corsOptions = {
       origin: function (origin, callback) {
-        if (!origin || allowedOrigins.includes(origin)) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.includes(origin) || 
+            origin.endsWith('.vercel.app') || 
+            origin.endsWith('.vercel.app/')) {
           callback(null, true);
         } else {
           console.warn(`❌ CORS blocked: ${origin}`);
-          callback(new Error("CORS not allowed"));
+          callback(new Error(`CORS not allowed. Allowed origins: ${allowedOrigins.join(', ')}`));
         }
       },
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"],
+      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+      allowedHeaders: [
+        "Content-Type", 
+        "Authorization", 
+        "X-Requested-With",
+        "Accept",
+        "Origin",
+        "Access-Control-Request-Method",
+        "Access-Control-Request-Headers"
+      ],
+      exposedHeaders: [
+        "Content-Length",
+        "Content-Range",
+        "X-Content-Range"
+      ],
       credentials: true,
+      preflightContinue: false,
+      optionsSuccessStatus: 204,
+      maxAge: 86400 // 24 hours
     };
 
+    // Enable CORS for all routes
     app.use(cors(corsOptions));
-    app.options("*", cors(corsOptions));
+    app.options("*", cors(corsOptions)); // Enable pre-flight for all routes
 
     // ====================== RATE LIMITING ======================
     const limiter = rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
       max: 100, // limit each IP to 100 requests per window
+      message: "Too many requests from this IP, please try again later"
     });
     app.use("/api/", limiter);
 
@@ -94,7 +121,7 @@ async function startServer() {
 
     // Request logging
     app.use((req, res, next) => {
-      console.log(`Incoming ${req.method} request to ${req.path}`);
+      console.log(`Incoming ${req.method} request to ${req.path} from ${req.get('origin') || 'no origin'}`);
       next();
     });
 
@@ -114,7 +141,8 @@ async function startServer() {
         status: "healthy",
         database: dbStatus,
         uptime: process.uptime(),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        allowedOrigins: allowedOrigins
       });
     });
 
@@ -129,11 +157,22 @@ async function startServer() {
 
     // ====================== ERROR HANDLING ======================
     app.use((err, req, res, next) => {
+      if (err.message && err.message.startsWith("CORS not allowed")) {
+        // Don't log these as errors since they're expected behavior
+        console.log(`CORS request blocked from: ${req.get('origin')}`);
+        return res.status(403).json({ 
+          error: "CORS not allowed",
+          message: err.message,
+          allowedOrigins: allowedOrigins
+        });
+      }
+
       console.error("🔥 ERROR:", {
         message: err.message,
         stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
         path: req.path,
-        method: req.method
+        method: req.method,
+        origin: req.get('origin')
       });
 
       if (err.name === "ValidationError") {
@@ -161,6 +200,7 @@ async function startServer() {
     const PORT = process.env.PORT || 5000;
     const server = app.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`🌍 Allowed CORS origins: ${allowedOrigins.join(', ')}`);
     });
 
     // Graceful shutdown
