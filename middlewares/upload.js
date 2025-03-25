@@ -2,41 +2,52 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Ensure uploads directory exists
-const uploadDir = 'uploads/';
+// Configure upload directory
+const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, '../uploads');
+
+// Ensure directory exists
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-// Define storage configuration
+// Storage configuration
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
+  destination: (req, file, cb) => {
     cb(null, uploadDir);
   },
-  filename: function (req, file, cb) {
-    const uniqueName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9-_\.]/g, '')}`;
-    cb(null, uniqueName);
-  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1E9)}`;
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
+  }
 });
 
-// File filter function for images and PDFs
+// File filter
 const fileFilter = (req, file, cb) => {
-  const extname = path.extname(file.originalname).toLowerCase();
-  const isImage = file.mimetype.startsWith('image/');
-  const isPDF = file.mimetype.startsWith('application/pdf');
+  const filetypes = /jpeg|jpg|png|webp|pdf/;
+  const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+  const mimetype = filetypes.test(file.mimetype);
 
-  if ((isImage && ['.jpeg', '.jpg', '.png', '.webp'].includes(extname)) || (isPDF && extname === '.pdf')) {
-    cb(null, true);
-  } else {
-    cb(new Error('Only one image (jpeg, jpg, png, webp) and one PDF file are allowed!'), false);
+  if (extname && mimetype) {
+    return cb(null, true);
   }
+  cb(new Error('Only images (JPEG, JPG, PNG, WebP) and PDF files are allowed!'));
 };
 
-// Create and export the multer instance (DO NOT CALL .fields() HERE)
+// Multer instance
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit per file
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
 });
 
-module.exports = upload;
+// Middleware to format file URLs
+const formatFileUrl = (req, res, next) => {
+  if (req.file) {
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    req.file.url = `${protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+  }
+  next();
+};
+
+module.exports = { upload, formatFileUrl };
