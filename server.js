@@ -4,6 +4,7 @@ const dotenv = require("dotenv");
 const path = require("path");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const mongoose = require("mongoose");
 const connectDB = require("./config/db");
 
 // Load environment variables
@@ -88,16 +89,7 @@ app.use("/api/", limiter);
 
 // ====================== MIDDLEWARE ======================
 app.use(express.json({ limit: "10mb" }));
-
-// ✅ Static Files (Uploads with proper CORS headers)
-app.use(
-  "/uploads",
-  express.static(path.join(__dirname, "uploads"), {
-    setHeaders: (res) => {
-      res.set("Cross-Origin-Resource-Policy", "cross-origin");
-    },
-  })
-);
+app.use(express.urlencoded({ extended: true }));
 
 // ====================== ROUTES ======================
 const authRoutes = require("./routes/auth");
@@ -106,6 +98,7 @@ const programRoutes = require("./routes/programRoutes");
 const researchRoutes = require("./routes/researchRoutes");
 const newsEventsRoutes = require("./routes/newsEventsRoutes");
 const contactRoutes = require("./routes/contactRoutes");
+const filesRoutes = require("./routes/files"); // Add this line for file routes
 
 app.use("/api/auth", authRoutes);
 app.use("/api/posts", postRoutes);
@@ -113,20 +106,64 @@ app.use("/api/programs", programRoutes);
 app.use("/api/research", researchRoutes);
 app.use("/api/news-events", newsEventsRoutes);
 app.use("/api/contact", contactRoutes);
+app.use("/api/files", filesRoutes); // Add this line to enable file routes
 
 // ====================== HEALTH CHECK ======================
 app.get("/health", (req, res) => {
-  res.status(200).json({ status: "healthy" });
+  // Check MongoDB connection
+  const dbStatus = mongoose.connection.readyState === 1 ? "connected" : "disconnected";
+  
+  res.status(200).json({ 
+    status: "healthy",
+    database: dbStatus,
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  });
 });
 
 // ====================== ERROR HANDLING ======================
 app.use((err, req, res, next) => {
   console.error("🔥 ERROR:", err.message);
-  res.status(500).json({ error: "Internal Server Error" });
+  
+  // Handle GridFS errors specifically
+  if (err.message.includes("FileNotFound")) {
+    return res.status(404).json({ error: "Requested file not found" });
+  }
+  
+  // Handle MongoDB errors
+  if (err.name === "MongoError") {
+    return res.status(503).json({ error: "Database service unavailable" });
+  }
+  
+  res.status(500).json({ 
+    error: "Internal Server Error",
+    message: process.env.NODE_ENV === "development" ? err.message : undefined
+  });
 });
 
 // ====================== START SERVER ======================
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
+});
+
+// Graceful shutdown
+process.on("SIGTERM", () => {
+  console.log("SIGTERM received. Shutting down gracefully");
+  server.close(() => {
+    mongoose.connection.close(false, () => {
+      console.log("MongoDB connection closed");
+      process.exit(0);
+    });
+  });
+});
+
+process.on("SIGINT", () => {
+  console.log("SIGINT received. Shutting down gracefully");
+  server.close(() => {
+    mongoose.connection.close(false, () => {
+      console.log("MongoDB connection closed");
+      process.exit(0);
+    });
+  });
 });

@@ -6,9 +6,9 @@ const newsEventSchema = new mongoose.Schema({
   title_ar: String,
   description_ar: String,
   section: String,
-  image: String, // Image file name
-  video: String, // YouTube video link
-  pdf: String, // PDF file name
+  imageId: mongoose.Schema.Types.ObjectId,
+  video: String,
+  pdfId: mongoose.Schema.Types.ObjectId,
 }, { timestamps: true });
 
 module.exports = mongoose.model('NewsEvent', newsEventSchema);

@@ -7,9 +7,9 @@ const postSchema = new mongoose.Schema({
   content_ar: String,
   page: String,
   section: String,
-  imageUrl: String,
-  video: String, // New field for video (YouTube link)
-  pdfUrl: String, // New field for PDF file
+  imageId: mongoose.Schema.Types.ObjectId, // Store GridFS file ID
+  video: String,
+  pdfId: mongoose.Schema.Types.ObjectId, // Store GridFS file ID
 }, { timestamps: true });
 
 module.exports = mongoose.model('Post', postSchema);

@@ -1,14 +1,14 @@
 const mongoose = require('mongoose');
 
 const programSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  description: { type: String, required: true },
-  title_ar: { type: String, required: true },
-  description_ar: { type: String, required: true },
-  section: { type: String, required: true },
-  image: { type: String }, // Image file name
-  video: { type: String }, // YouTube video link
-  pdf: { type: String }, // PDF file name
+  title: String,
+  description: String,
+  title_ar: String,
+  description_ar: String,
+  section: String,
+  imageId: mongoose.Schema.Types.ObjectId,
+  video: String,
+  pdfId: mongoose.Schema.Types.ObjectId,
 }, { timestamps: true });
 
 module.exports = mongoose.model('Program', programSchema);

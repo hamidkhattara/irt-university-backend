@@ -3,13 +3,8 @@ const Research = require('../models/Research');
 exports.createResearch = async (req, res) => {
   try {
     const { title, description, title_ar, description_ar, section, video } = req.body;
-    const imageUrl = req.files['image'] ? `${req.protocol}://${req.get('host')}/uploads/${req.files['image'][0].filename}` : '';
-    const pdfUrl = req.files['pdf'] ? `${req.protocol}://${req.get('host')}/uploads/${req.files['pdf'][0].filename}` : '';
-
-    // Validate that either image or video is provided
-    if (!imageUrl && !video) {
-      return res.status(400).json({ error: 'Please provide either an image or a video.' });
-    }
+    const imageId = req.files['image'] ? req.files['image'][0].id : null;
+    const pdfId = req.files['pdf'] ? req.files['pdf'][0].id : null;
 
     const newResearch = new Research({
       title,
@@ -17,9 +12,9 @@ exports.createResearch = async (req, res) => {
       title_ar,
       description_ar,
       section,
-      imageUrl,
+      imageId,
       video,
-      pdfUrl,
+      pdfId,
     });
 
     await newResearch.save();
