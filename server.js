@@ -40,7 +40,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// CORS Configuration
+// ✅ CORS Configuration (Fixed)
 const allowedOrigins = [
   "https://irt-university-frontend.vercel.app",
   "http://localhost:3000",
@@ -52,6 +52,7 @@ app.use(
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
+        console.warn(`❌ CORS blocked: ${origin}`);
         callback(new Error("Not allowed by CORS"));
       }
     },
