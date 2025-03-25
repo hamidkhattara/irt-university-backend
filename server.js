@@ -10,17 +10,22 @@ const connectDB = require("./config/db");
 // Load environment variables
 dotenv.config();
 
-// Ensure MongoDB URI is defined
-if (!process.env.MONGODB_URI) {
-  console.error("❌ MONGODB_URI is not defined in your .env file");
-  process.exit(1);
+// Validate required environment variables
+const requiredEnvVars = ['MONGODB_URI', 'PORT'];
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    console.error(`❌ ${envVar} is not defined in your .env file`);
+    process.exit(1);
+  }
 }
 
-// Initialize MongoDB connection first
-connectDB()
-  .then(() => {
+// Initialize the application
+async function startServer() {
+  try {
+    // Connect to MongoDB first
+    const connection = await connectDB();
     console.log("✅ MongoDB Atlas connected successfully");
-    
+
     // Initialize Express app after successful DB connection
     const app = express();
 
@@ -87,6 +92,12 @@ connectDB()
     app.use(express.json({ limit: "10mb" }));
     app.use(express.urlencoded({ extended: true }));
 
+    // Request logging
+    app.use((req, res, next) => {
+      console.log(`Incoming ${req.method} request to ${req.path}`);
+      next();
+    });
+
     // ====================== ROUTES ======================
     const authRoutes = require("./routes/auth");
     const postRoutes = require("./routes/Posts");
@@ -96,15 +107,7 @@ connectDB()
     const contactRoutes = require("./routes/contactRoutes");
     const filesRoutes = require("./routes/files");
 
-    app.use("/api/auth", authRoutes);
-    app.use("/api/posts", postRoutes);
-    app.use("/api/programs", programRoutes);
-    app.use("/api/research", researchRoutes);
-    app.use("/api/news-events", newsEventsRoutes);
-    app.use("/api/contact", contactRoutes);
-    app.use("/api/files", filesRoutes);
-
-    // ====================== HEALTH CHECK ======================
+    // Health check endpoint
     app.get("/health", (req, res) => {
       const dbStatus = mongoose.connection.readyState === 1 ? "connected" : "disconnected";
       res.status(200).json({ 
@@ -115,21 +118,42 @@ connectDB()
       });
     });
 
+    // API routes
+    app.use("/api/auth", authRoutes);
+    app.use("/api/posts", postRoutes);
+    app.use("/api/programs", programRoutes);
+    app.use("/api/research", researchRoutes);
+    app.use("/api/news-events", newsEventsRoutes);
+    app.use("/api/contact", contactRoutes);
+    app.use("/api/files", filesRoutes);
+
     // ====================== ERROR HANDLING ======================
     app.use((err, req, res, next) => {
-      console.error("🔥 ERROR:", err.message);
-      
+      console.error("🔥 ERROR:", {
+        message: err.message,
+        stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
+        path: req.path,
+        method: req.method
+      });
+
+      if (err.name === "ValidationError") {
+        return res.status(400).json({ 
+          error: "Validation Error",
+          details: err.errors 
+        });
+      }
+
       if (err.message.includes("FileNotFound")) {
         return res.status(404).json({ error: "Requested file not found" });
       }
-      
+
       if (err.name === "MongoError") {
         return res.status(503).json({ error: "Database service unavailable" });
       }
-      
-      res.status(500).json({ 
+
+      res.status(err.statusCode || 500).json({ 
         error: "Internal Server Error",
-        message: process.env.NODE_ENV === "development" ? err.message : undefined
+        message: process.env.NODE_ENV === "development" ? err.message : "Something went wrong"
       });
     });
 
@@ -140,27 +164,23 @@ connectDB()
     });
 
     // Graceful shutdown
-    process.on("SIGTERM", () => {
-      console.log("SIGTERM received. Shutting down gracefully");
+    const shutdown = () => {
+      console.log("🛑 Shutting down gracefully...");
       server.close(() => {
         mongoose.connection.close(false, () => {
-          console.log("MongoDB connection closed");
+          console.log("📦 MongoDB connection closed");
           process.exit(0);
         });
       });
-    });
+    };
 
-    process.on("SIGINT", () => {
-      console.log("SIGINT received. Shutting down gracefully");
-      server.close(() => {
-        mongoose.connection.close(false, () => {
-          console.log("MongoDB connection closed");
-          process.exit(0);
-        });
-      });
-    });
-  })
-  .catch((err) => {
-    console.error("❌ Failed to connect to MongoDB Atlas:", err.message);
+    process.on("SIGTERM", shutdown);
+    process.on("SIGINT", shutdown);
+
+  } catch (error) {
+    console.error('❌ Failed to start application:', error.message);
     process.exit(1);
-  });
+  }
+}
+
+startServer();
