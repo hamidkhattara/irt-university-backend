@@ -28,9 +28,25 @@ const app = express();
 
 app.set("trust proxy", 1); // ✅ Fix for express-rate-limit
 
-// Security Middleware
-app.use(helmet());
-app.disable("x-powered-by");
+// ====================== SECURITY CONFIGURATION ======================
+// ✅ Custom CSP with frame-ancestors for iframe embedding
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        "frame-ancestors": [
+          "'self'",
+          "https://irt-university-frontend-fm6m-ol3pnrf5v-hamids-projects-e0694705.vercel.app",
+          "http://localhost:3000",
+        ],
+      },
+    },
+    crossOriginEmbedderPolicy: false, // ✅ Required for some cross-origin embeds
+  })
+);
+
+app.disable("x-powered-by"); // ✅ Hide Express server info
 
 // ✅ Force HTTPS in production
 app.use((req, res, next) => {
@@ -40,7 +56,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ CORS Configuration (Final Fix)
+// ====================== CORS CONFIGURATION ======================
 const allowedOrigins = [
   "https://irt-university-frontend-fm6m-ol3pnrf5v-hamids-projects-e0694705.vercel.app",
   "http://localhost:3000",
@@ -63,17 +79,17 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions)); // ✅ Handle Preflight Requests
 
-// ✅ Rate Limiting (Prevents DDoS attacks)
+// ====================== RATE LIMITING ======================
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100, // limit each IP to 100 requests per window
 });
 app.use("/api/", limiter);
 
-// ✅ Middleware
+// ====================== MIDDLEWARE ======================
 app.use(express.json({ limit: "10mb" }));
 
-// ✅ Static Files (Uploads without unnecessary redirects)
+// ✅ Static Files (Uploads with proper CORS headers)
 app.use(
   "/uploads",
   express.static(path.join(__dirname, "uploads"), {
@@ -83,7 +99,7 @@ app.use(
   })
 );
 
-// ✅ Routes
+// ====================== ROUTES ======================
 const authRoutes = require("./routes/auth");
 const postRoutes = require("./routes/Posts");
 const programRoutes = require("./routes/programRoutes");
@@ -98,18 +114,18 @@ app.use("/api/research", researchRoutes);
 app.use("/api/news-events", newsEventsRoutes);
 app.use("/api/contact", contactRoutes);
 
-// ✅ Health Check
+// ====================== HEALTH CHECK ======================
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "healthy" });
 });
 
-// ✅ Error Handling Middleware
+// ====================== ERROR HANDLING ======================
 app.use((err, req, res, next) => {
   console.error("🔥 ERROR:", err.message);
   res.status(500).json({ error: "Internal Server Error" });
 });
 
-// ✅ Start Server
+// ====================== START SERVER ======================
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
