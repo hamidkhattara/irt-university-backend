@@ -4,9 +4,14 @@ const mongoose = require('mongoose');
 const path = require('path');
 
 const storage = new GridFsStorage({
-  db: mongoose.connection,
+  db: () => {
+    if (mongoose.connection.readyState !== 1) {
+      throw new Error('Database not connected');
+    }
+    return mongoose.connection;
+  },
   options: { useNewUrlParser: true, useUnifiedTopology: true },
-  file: (req, file) => {
+  file: async (req, file) => {
     const allowedTypes = {
       'image/jpeg': 'jpg',
       'image/png': 'png',
@@ -14,7 +19,7 @@ const storage = new GridFsStorage({
     };
     
     if (!allowedTypes[file.mimetype]) {
-      return null; // This will trigger an error
+      return Promise.reject(new Error('Invalid file type. Only JPEG, PNG, and PDF files are allowed.'));
     }
 
     const fileExt = allowedTypes[file.mimetype];
@@ -55,9 +60,10 @@ const handleUploadErrors = (err, req, res, next) => {
     }
     return res.status(400).json({ error: err.message });
   } else if (err) {
-    return res.status(500).json({ error: err.message });
+    next(err); // Pass the error to a global error handler
+  } else {
+    next();
   }
-  next();
 };
 
 module.exports = { upload, handleUploadErrors };
