@@ -24,11 +24,12 @@ const connectDB = async () => {
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-      autoReconnect: true, // Enables automatic reconnection
-      reconnectTries: 3, // Number of reconnection attempts
-      reconnectInterval: 1000, // Time between reconnection attempts (1 second)
+      serverSelectionTimeoutMS: 5000, // How long to wait for server selection
+      socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
+      maxPoolSize: 10, // Maximum number of sockets in the connection pool
+      retryWrites: true, // Enable retryable writes
+      retryReads: true, // Enable retryable reads
+      connectTimeoutMS: 10000 // Give up initial connection after 10 seconds
     });
 
     console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
