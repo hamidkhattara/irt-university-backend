@@ -1,9 +1,7 @@
 const multer = require('multer');
 const { GridFsStorage } = require('multer-gridfs-storage');
 const mongoose = require('mongoose');
-const path = require('path');
 
-// Create storage engine with better connection handling
 const storage = new GridFsStorage({
   db: mongoose.connection,
   options: { useNewUrlParser: true, useUnifiedTopology: true },
@@ -15,7 +13,7 @@ const storage = new GridFsStorage({
     };
     
     if (!allowedTypes[file.mimetype]) {
-      throw new Error('Invalid file type. Only JPEG, PNG, and PDF files are allowed.');
+      throw new Error('Only JPEG, PNG, and PDF files are allowed');
     }
 
     return {
@@ -24,7 +22,6 @@ const storage = new GridFsStorage({
       metadata: {
         originalName: file.originalname,
         uploadDate: new Date(),
-        uploader: req.user?.id || 'anonymous',
         contentType: file.mimetype
       }
     };
@@ -33,14 +30,17 @@ const storage = new GridFsStorage({
 
 const fileFilter = (req, file, cb) => {
   const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
-  cb(null, allowedTypes.includes(file.mimetype));
+  if (!allowedTypes.includes(file.mimetype)) {
+    return cb(new Error('Invalid file type'), false);
+  }
+  cb(null, true);
 };
 
 const upload = multer({
   storage,
   limits: { 
     fileSize: 10 * 1024 * 1024, // 10MB
-    files: 2 // Max 2 files (image + pdf)
+    files: 2
   },
   fileFilter
 });
@@ -48,10 +48,10 @@ const upload = multer({
 const handleUploadErrors = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(413).json({ error: 'File too large. Maximum size is 10MB.' });
+      return res.status(413).json({ error: 'File too large (max 10MB)' });
     }
     if (err.code === 'LIMIT_FILE_COUNT') {
-      return res.status(400).json({ error: 'Too many files uploaded. Maximum is 2.' });
+      return res.status(400).json({ error: 'Maximum 2 files allowed' });
     }
     return res.status(400).json({ error: err.message });
   } else if (err) {
@@ -59,7 +59,7 @@ const handleUploadErrors = (err, req, res, next) => {
       return res.status(400).json({ error: err.message });
     }
     if (err.message.includes('Database not connected')) {
-      return res.status(503).json({ error: 'Database service unavailable' });
+      return res.status(503).json({ error: 'Database unavailable' });
     }
     next(err);
   } else {

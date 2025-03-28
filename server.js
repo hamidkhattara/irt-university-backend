@@ -70,7 +70,6 @@ async function startServer() {
 
     const corsOptions = {
       origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
         
         if (allowedOrigins.includes(origin) || 
@@ -90,27 +89,30 @@ async function startServer() {
         "Accept",
         "Origin",
         "Access-Control-Request-Method",
-        "Access-Control-Request-Headers"
+        "Access-Control-Request-Headers",
+        "Range" // Added for file streaming support
       ],
       exposedHeaders: [
         "Content-Length",
         "Content-Range",
-        "X-Content-Range"
+        "X-Content-Range",
+        "Accept-Ranges", // Added for file serving
+        "Content-Disposition" // Added for file downloads
       ],
       credentials: true,
       preflightContinue: false,
       optionsSuccessStatus: 204,
-      maxAge: 86400 // 24 hours
+      maxAge: 86400
     };
 
     // Enable CORS for all routes
     app.use(cors(corsOptions));
-    app.options("*", cors(corsOptions)); // Enable pre-flight for all routes
+    app.options("*", cors(corsOptions));
 
     // ====================== RATE LIMITING ======================
     const limiter = rateLimit({
-      windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 100, // limit each IP to 100 requests per window
+      windowMs: 15 * 60 * 1000,
+      max: 100,
       message: "Too many requests from this IP, please try again later"
     });
     app.use("/api/", limiter);
@@ -158,7 +160,6 @@ async function startServer() {
     // ====================== ERROR HANDLING ======================
     app.use((err, req, res, next) => {
       if (err.message && err.message.startsWith("CORS not allowed")) {
-        // Don't log these as errors since they're expected behavior
         console.log(`CORS request blocked from: ${req.get('origin')}`);
         return res.status(403).json({ 
           error: "CORS not allowed",
@@ -175,6 +176,14 @@ async function startServer() {
         origin: req.get('origin')
       });
 
+      // Enhanced file-related error handling
+      if (err.message.includes("FileNotFound") || err.message.includes("GridFS")) {
+        return res.status(404).json({ 
+          error: "File operation failed",
+          message: "The requested file is not available"
+        });
+      }
+
       if (err.name === "ValidationError") {
         return res.status(400).json({ 
           error: "Validation Error",
@@ -182,12 +191,11 @@ async function startServer() {
         });
       }
 
-      if (err.message.includes("FileNotFound")) {
-        return res.status(404).json({ error: "Requested file not found" });
-      }
-
-      if (err.name === "MongoError") {
-        return res.status(503).json({ error: "Database service unavailable" });
+      if (err.name === "MongoError" || err.name === "MongoServerSelectionError") {
+        return res.status(503).json({ 
+          error: "Database service unavailable",
+          message: "Please try again later"
+        });
       }
 
       res.status(err.statusCode || 500).json({ 
