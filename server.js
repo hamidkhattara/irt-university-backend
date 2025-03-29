@@ -34,13 +34,12 @@ async function startServer() {
 
     // ====================== SECURITY CONFIGURATION ======================
     const allowedOrigins = process.env.ALLOWED_ORIGINS 
-      ? process.env.ALLOWED_ORIGINS.split(',') 
-      : [
-          "https://irt-university-frontend.vercel.app",
-          "https://irt-university-frontend-*.vercel.app",
-          "http://localhost:3000"
-        ];
-
+    ? process.env.ALLOWED_ORIGINS.split(',') 
+    : [
+        "https://irt-university-frontend.vercel.app",
+        "https://irt-university-frontend-*.vercel.app",
+        "http://localhost:3000"
+      ];
     // Enhanced CSP configuration
     app.use(
       helmet({
@@ -76,12 +75,17 @@ async function startServer() {
     // ====================== CORS CONFIGURATION ======================
     const corsOptions = {
       origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin && process.env.NODE_ENV !== 'production') {
+        // Allow requests with no origin (like mobile apps, curl, or server-to-server)
+        if (!origin) {
+          // In production, you might want to be more restrictive
+          if (process.env.NODE_ENV === 'production') {
+            console.warn('⚠️ No origin header in production request');
+            return callback(new Error('Origin header required in production'));
+          }
           return callback(null, true);
         }
         
-        // Allow all Vercel preview deployments and exact matches
+        // Check against allowed origins
         const originAllowed = allowedOrigins.some(pattern => {
           if (pattern.includes('*')) {
             const regex = new RegExp(pattern.replace(/\*/g, '.*'));
@@ -89,7 +93,7 @@ async function startServer() {
           }
           return origin === pattern;
         });
-
+    
         if (originAllowed) {
           return callback(null, true);
         }
