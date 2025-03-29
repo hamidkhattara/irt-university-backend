@@ -8,10 +8,10 @@ const mongoose = require("mongoose");
 const connectDB = require("./config/db");
 
 // Load environment variables
-dotenv.config({ path: path.resolve(__dirname, `.env.${process.env.NODE_ENV || 'development'}`) });
+dotenv.config();
 
 // Validate required environment variables
-const requiredEnvVars = ['MONGODB_URI', 'PORT', 'JWT_SECRET'];
+const requiredEnvVars = ['MONGODB_URI', 'PORT'];
 for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
     console.error(`❌ ${envVar} is not defined in your .env file`);
@@ -22,26 +22,16 @@ for (const envVar of requiredEnvVars) {
 // Initialize the application
 async function startServer() {
   try {
-    // Connect to MongoDB
+    // Connect to MongoDB first
     const connection = await connectDB();
     console.log("✅ MongoDB Atlas connected successfully");
 
-    // Initialize Express app
+    // Initialize Express app after successful DB connection
     const app = express();
 
-    // Trust first proxy
     app.set("trust proxy", 1);
 
     // ====================== SECURITY CONFIGURATION ======================
-    const allowedOrigins = process.env.ALLOWED_ORIGINS 
-      ? process.env.ALLOWED_ORIGINS.split(',') 
-      : [
-          "https://irt-university-frontend.vercel.app",
-          "https://irt-university-frontend-*.vercel.app",
-          "http://localhost:3000"
-        ];
-
-    // Enhanced CSP and CORS configuration
     app.use(
       helmet({
         contentSecurityPolicy: {
@@ -49,12 +39,11 @@ async function startServer() {
             ...helmet.contentSecurityPolicy.getDefaultDirectives(),
             "frame-ancestors": [
               "'self'",
-              ...allowedOrigins.filter(origin => origin.includes('http'))
+              "https://irt-university-frontend.vercel.app",
+              "https://*.vercel.app",
+              "http://localhost:3000"
             ],
-            "img-src": ["'self'", "data:", "blob:", "https://*.youtube.com", "https://via.placeholder.com"],
-            "media-src": ["'self'", "data:", "blob:"],
-            "connect-src": ["'self'", ...allowedOrigins]
-          }
+          },
         },
         crossOriginEmbedderPolicy: false,
         crossOriginResourcePolicy: { policy: "cross-origin" }
@@ -64,33 +53,32 @@ async function startServer() {
     app.disable("x-powered-by");
 
     // Force HTTPS in production
-    if (process.env.NODE_ENV === "production") {
-      app.use((req, res, next) => {
-        if (req.headers["x-forwarded-proto"] !== "https") {
-          return res.redirect(301, `https://${req.headers.host}${req.url}`);
-        }
-        next();
-      });
-    }
+    app.use((req, res, next) => {
+      if (req.headers["x-forwarded-proto"] !== "https" && process.env.NODE_ENV === "production") {
+        return res.redirect(301, `https://${req.headers.host}${req.url}`);
+      }
+      next();
+    });
 
     // ====================== CORS CONFIGURATION ======================
+    const allowedOrigins = [
+      "https://irt-university-frontend.vercel.app",
+      "https://*.vercel.app",
+      "http://localhost:3000"
+    ];
+
     const corsOptions = {
       origin: function (origin, callback) {
         // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin && process.env.NODE_ENV !== 'production') {
+        if (!origin) return callback(null, true);
+        
+        // Allow all vercel.app subdomains
+        if (origin.endsWith('.vercel.app') || allowedOrigins.includes(origin)) {
           return callback(null, true);
         }
-        
-        // Allow all Vercel preview deployments and exact matches
-        if (origin.match(/\.vercel\.app$/) || 
-            allowedOrigins.includes(origin) ||
-            allowedOrigins.some(allowed => allowed.includes('*') && 
-              new RegExp(allowed.replace('*', '.*')).test(origin))) {
-          return callback(null, true);
-        }
-        
+
         console.warn(`❌ CORS blocked: ${origin}`);
-        callback(new Error('Not allowed by CORS'));
+        callback(new Error(`CORS not allowed. Allowed origins: ${allowedOrigins.join(', ')}`));
       },
       methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
       allowedHeaders: [
@@ -99,62 +87,61 @@ async function startServer() {
         "X-Requested-With",
         "Accept",
         "Origin",
-        "Range"
+        "Range",
+        "Accept-Ranges"
       ],
       exposedHeaders: [
         "Content-Length",
         "Content-Range",
-        "X-Content-Range",
         "Accept-Ranges",
-        "Content-Disposition",
-        "X-Filename"
+        "Content-Disposition"
       ],
       credentials: true,
+      preflightContinue: false,
+      optionsSuccessStatus: 204,
       maxAge: 86400
     };
 
+    // Enable CORS for all routes
     app.use(cors(corsOptions));
     app.options("*", cors(corsOptions));
 
-    // ====================== RATE LIMITING ======================
-    const apiLimiter = rateLimit({
-      windowMs: 15 * 60 * 1000,
-      max: process.env.NODE_ENV === 'production' ? 100 : 1000,
-      message: {
-        error: "Too many requests",
-        message: "Please try again after 15 minutes"
-      },
-      standardHeaders: true,
-      legacyHeaders: false
+    // Additional headers for Render.com compatibility
+    app.use((req, res, next) => {
+      res.header("Access-Control-Allow-Origin", corsOptions.origin);
+      res.header("Access-Control-Allow-Credentials", "true");
+      res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+      next();
     });
 
-    app.use("/api/", apiLimiter);
+    // ====================== RATE LIMITING ======================
+    const limiter = rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 100,
+      message: "Too many requests from this IP, please try again later"
+    });
+    app.use("/api/", limiter);
 
     // ====================== MIDDLEWARE ======================
-    app.use(express.json({ 
-      limit: "10mb",
-      verify: (req, res, buf) => {
-        try {
-          JSON.parse(buf.toString());
-        } catch (e) {
-          throw new Error("Invalid JSON payload");
-        }
-      }
-    }));
-    
-    app.use(express.urlencoded({ 
-      extended: true,
-      limit: "10mb"
-    }));
+    app.use(express.json({ limit: "10mb" }));
+    app.use(express.urlencoded({ extended: true }));
 
-    // Enhanced request logging
+    // Request logging
     app.use((req, res, next) => {
-      const start = Date.now();
-      res.on('finish', () => {
-        const duration = Date.now() - start;
-        console.log(`${req.method} ${req.originalUrl} - ${res.statusCode} ${duration}ms`);
-      });
+      console.log(`Incoming ${req.method} request to ${req.path} from ${req.get('origin') || 'no origin'}`);
       next();
+    });
+
+    // URL validation middleware
+    app.use((req, res, next) => {
+      try {
+        // Validate URL components
+        new URL(req.url, `http://${req.headers.host}`);
+        next();
+      } catch (err) {
+        console.error('Invalid URL:', req.url);
+        res.status(400).json({ error: "Invalid URL format" });
+      }
     });
 
     // ====================== ROUTES ======================
@@ -167,23 +154,15 @@ async function startServer() {
     const filesRoutes = require("./routes/files");
 
     // Health check endpoint
-    app.get("/health", async (req, res) => {
-      try {
-        await mongoose.connection.db.admin().ping();
-        res.status(200).json({ 
-          status: "healthy",
-          database: "connected",
-          uptime: process.uptime(),
-          environment: process.env.NODE_ENV || 'development',
-          allowedOrigins: allowedOrigins
-        });
-      } catch (err) {
-        res.status(503).json({
-          status: "unhealthy",
-          database: "disconnected",
-          error: err.message
-        });
-      }
+    app.get("/health", (req, res) => {
+      const dbStatus = mongoose.connection.readyState === 1 ? "connected" : "disconnected";
+      res.status(200).json({ 
+        status: "healthy",
+        database: dbStatus,
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+        allowedOrigins: allowedOrigins
+      });
     });
 
     // API routes
@@ -195,98 +174,85 @@ async function startServer() {
     app.use("/api/contact", contactRoutes);
     app.use("/api/files", filesRoutes);
 
-    // Serve static files in production
-    if (process.env.NODE_ENV === 'production') {
-      app.use(express.static(path.join(__dirname, 'client/build')));
-      
-      app.get('*', (req, res) => {
-        res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
-      });
-    }
-
-    // ====================== ERROR HANDLING ======================
-    // 404 Handler
-    app.use((req, res) => {
-      res.status(404).json({
-        error: "Not Found",
-        message: `The requested resource ${req.originalUrl} was not found`
-      });
+    // URL parsing error handler
+    app.use((err, req, res, next) => {
+      if (err.message && err.message.includes("Cannot read properties of undefined")) {
+        console.error('URL Parsing Error:', {
+          path: req.path,
+          method: req.method,
+          ip: req.ip
+        });
+        return res.status(400).json({ 
+          error: "Invalid request",
+          message: "Malformed URL or parameters"
+        });
+      }
+      next(err);
     });
 
-    // Main error handler
+    // ====================== ERROR HANDLING ======================
     app.use((err, req, res, next) => {
-      // Handle CORS errors
-      if (err.message === 'Not allowed by CORS') {
+      if (err.message && err.message.startsWith("CORS not allowed")) {
+        console.log(`CORS request blocked from: ${req.get('origin')}`);
         return res.status(403).json({ 
           error: "CORS not allowed",
-          message: `Origin not allowed. Allowed origins: ${allowedOrigins.join(', ')}`,
+          message: err.message,
           allowedOrigins: allowedOrigins
         });
       }
 
-      // Log the error
       console.error("🔥 ERROR:", {
         message: err.message,
         stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
         path: req.path,
         method: req.method,
-        ip: req.ip
+        origin: req.get('origin')
       });
 
-      // Determine status code and message
-      let status = err.statusCode || 500;
-      let message = process.env.NODE_ENV === "development" ? err.message : "Something went wrong";
-
       if (err.name === "ValidationError") {
-        status = 400;
-        message = "Validation Error";
-      } else if (err.name === "MongoError") {
-        status = 503;
-        message = "Database service unavailable";
-      } else if (err.message.includes("FileNotFound")) {
-        status = 404;
-        message = "The requested file is not available";
+        return res.status(400).json({ 
+          error: "Validation Error",
+          details: err.errors 
+        });
       }
 
-      res.status(status).json({ 
-        error: message,
-        ...(process.env.NODE_ENV === "development" && { details: err.stack })
+      if (err.message.includes("FileNotFound")) {
+        return res.status(404).json({ error: "Requested file not found" });
+      }
+
+      if (err.name === "MongoError") {
+        return res.status(503).json({ error: "Database service unavailable" });
+      }
+
+      res.status(err.statusCode || 500).json({ 
+        error: "Internal Server Error",
+        message: process.env.NODE_ENV === "development" ? err.message : "Something went wrong"
       });
     });
 
     // ====================== START SERVER ======================
     const PORT = process.env.PORT || 5000;
     const server = app.listen(PORT, () => {
-      console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+      console.log(`🚀 Server running on port ${PORT}`);
       console.log(`🌍 Allowed CORS origins: ${allowedOrigins.join(', ')}`);
     });
 
     // Graceful shutdown
-    const shutdown = async (signal) => {
-      console.log(`🛑 Received ${signal}, shutting down gracefully...`);
-      
-      server.close(async () => {
-        console.log('🔒 HTTP server closed');
-        await mongoose.connection.close(false);
-        console.log('📦 MongoDB connection closed');
-        process.exit(0);
+    const shutdown = () => {
+      console.log("🛑 Shutting down gracefully...");
+      server.close(() => {
+        mongoose.connection.close(false, () => {
+          console.log("📦 MongoDB connection closed");
+          process.exit(0);
+        });
       });
-
-      setTimeout(() => {
-        console.error('⚠️ Forcing shutdown after timeout');
-        process.exit(1);
-      }, 10000);
     };
 
-    process.on("SIGTERM", () => shutdown('SIGTERM'));
-    process.on("SIGINT", () => shutdown('SIGINT'));
-    process.on("unhandledRejection", (err) => {
-      console.error('⚠️ Unhandled Rejection:', err);
-      shutdown('unhandledRejection');
-    });
+    process.on("SIGTERM", shutdown);
+    process.on("SIGINT", shutdown);
 
   } catch (error) {
-    console.error('❌ Failed to start application:', error);
+    console.error('❌ Failed to start application:', error.message);
     process.exit(1);
   }
 }
