@@ -22,17 +22,26 @@ for (const envVar of requiredEnvVars) {
 // Initialize the application
 async function startServer() {
   try {
-    // Connect to MongoDB with enhanced error handling
+    // Connect to MongoDB
     const connection = await connectDB();
     console.log("✅ MongoDB Atlas connected successfully");
 
-    // Initialize Express app after successful DB connection
+    // Initialize Express app
     const app = express();
 
-    // Trust first proxy (important for rate limiting and secure cookies in production)
+    // Trust first proxy
     app.set("trust proxy", 1);
 
     // ====================== SECURITY CONFIGURATION ======================
+    const allowedOrigins = process.env.ALLOWED_ORIGINS 
+      ? process.env.ALLOWED_ORIGINS.split(',') 
+      : [
+          "https://irt-university-frontend.vercel.app",
+          "https://irt-university-frontend-*.vercel.app",
+          "http://localhost:3000"
+        ];
+
+    // Enhanced CSP and CORS configuration
     app.use(
       helmet({
         contentSecurityPolicy: {
@@ -40,15 +49,15 @@ async function startServer() {
             ...helmet.contentSecurityPolicy.getDefaultDirectives(),
             "frame-ancestors": [
               "'self'",
-              "https://irt-university-frontend-fm6m-ol3pnrf5v-hamids-projects-e0694705.vercel.app",
-              "https://irt-university-frontend-fm6m-qp4iejqk4-hamids-projects-e0694705.vercel.app",
-              "http://localhost:3000",
+              ...allowedOrigins.filter(origin => origin.includes('http'))
             ],
-            "img-src": ["'self'", "data:", "https://img.youtube.com", "https://via.placeholder.com"],
-          },
+            "img-src": ["'self'", "data:", "blob:", "https://*.youtube.com", "https://via.placeholder.com"],
+            "media-src": ["'self'", "data:", "blob:"],
+            "connect-src": ["'self'", ...allowedOrigins]
+          }
         },
         crossOriginEmbedderPolicy: false,
-        crossOriginResourcePolicy: { policy: "cross-origin" } // Needed for file downloads
+        crossOriginResourcePolicy: { policy: "cross-origin" }
       })
     );
 
@@ -65,14 +74,6 @@ async function startServer() {
     }
 
     // ====================== CORS CONFIGURATION ======================
-    const allowedOrigins = process.env.ALLOWED_ORIGINS 
-      ? process.env.ALLOWED_ORIGINS.split(',') 
-      : [
-          "https://irt-university-frontend-fm6m-ol3pnrf5v-hamids-projects-e0694705.vercel.app",
-          "https://irt-university-frontend-fm6m-qp4iejqk4-hamids-projects-e0694705.vercel.app",
-          "http://localhost:3000"
-        ];
-
     const corsOptions = {
       origin: function (origin, callback) {
         // Allow requests with no origin (like mobile apps or curl requests)
@@ -80,14 +81,16 @@ async function startServer() {
           return callback(null, true);
         }
         
-        if (allowedOrigins.includes(origin) || 
-            origin?.endsWith('.vercel.app') || 
-            origin?.endsWith('.vercel.app/')) {
-          callback(null, true);
-        } else {
-          console.warn(`❌ CORS blocked: ${origin}`);
-          callback(new Error(`CORS not allowed. Allowed origins: ${allowedOrigins.join(', ')}`));
+        // Allow all Vercel preview deployments and exact matches
+        if (origin.match(/\.vercel\.app$/) || 
+            allowedOrigins.includes(origin) ||
+            allowedOrigins.some(allowed => allowed.includes('*') && 
+              new RegExp(allowed.replace('*', '.*')).test(origin))) {
+          return callback(null, true);
         }
+        
+        console.warn(`❌ CORS blocked: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
       },
       methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
       allowedHeaders: [
@@ -96,8 +99,6 @@ async function startServer() {
         "X-Requested-With",
         "Accept",
         "Origin",
-        "Access-Control-Request-Method",
-        "Access-Control-Request-Headers",
         "Range"
       ],
       exposedHeaders: [
@@ -106,22 +107,19 @@ async function startServer() {
         "X-Content-Range",
         "Accept-Ranges",
         "Content-Disposition",
-        "X-Filename" // For file downloads
+        "X-Filename"
       ],
       credentials: true,
-      preflightContinue: false,
-      optionsSuccessStatus: 204,
       maxAge: 86400
     };
 
-    // Enable CORS for all routes
     app.use(cors(corsOptions));
     app.options("*", cors(corsOptions));
 
     // ====================== RATE LIMITING ======================
     const apiLimiter = rateLimit({
-      windowMs: 15 * 60 * 1000, // 15 minutes
-      max: process.env.NODE_ENV === 'production' ? 100 : 1000, // Different limits for prod/dev
+      windowMs: 15 * 60 * 1000,
+      max: process.env.NODE_ENV === 'production' ? 100 : 1000,
       message: {
         error: "Too many requests",
         message: "Please try again after 15 minutes"
@@ -130,7 +128,6 @@ async function startServer() {
       legacyHeaders: false
     });
 
-    // Apply to API routes only
     app.use("/api/", apiLimiter);
 
     // ====================== MIDDLEWARE ======================
@@ -147,8 +144,7 @@ async function startServer() {
     
     app.use(express.urlencoded({ 
       extended: true,
-      limit: "10mb",
-      parameterLimit: 10000 
+      limit: "10mb"
     }));
 
     // Enhanced request logging
@@ -170,7 +166,7 @@ async function startServer() {
     const contactRoutes = require("./routes/contactRoutes");
     const filesRoutes = require("./routes/files");
 
-    // Health check endpoint with DB ping
+    // Health check endpoint
     app.get("/health", async (req, res) => {
       try {
         await mongoose.connection.db.admin().ping();
@@ -178,8 +174,8 @@ async function startServer() {
           status: "healthy",
           database: "connected",
           uptime: process.uptime(),
-          timestamp: new Date().toISOString(),
-          environment: process.env.NODE_ENV || 'development'
+          environment: process.env.NODE_ENV || 'development',
+          allowedOrigins: allowedOrigins
         });
       } catch (err) {
         res.status(503).json({
@@ -210,7 +206,7 @@ async function startServer() {
 
     // ====================== ERROR HANDLING ======================
     // 404 Handler
-    app.use((req, res, next) => {
+    app.use((req, res) => {
       res.status(404).json({
         error: "Not Found",
         message: `The requested resource ${req.originalUrl} was not found`
@@ -220,26 +216,24 @@ async function startServer() {
     // Main error handler
     app.use((err, req, res, next) => {
       // Handle CORS errors
-      if (err.message && err.message.startsWith("CORS not allowed")) {
+      if (err.message === 'Not allowed by CORS') {
         return res.status(403).json({ 
           error: "CORS not allowed",
-          message: err.message,
+          message: `Origin not allowed. Allowed origins: ${allowedOrigins.join(', ')}`,
           allowedOrigins: allowedOrigins
         });
       }
 
-      // Log the error with more context
+      // Log the error
       console.error("🔥 ERROR:", {
         message: err.message,
         stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
         path: req.path,
         method: req.method,
-        ip: req.ip,
-        body: req.body,
-        headers: req.headers
+        ip: req.ip
       });
 
-      // Handle different error types
+      // Determine status code and message
       let status = err.statusCode || 500;
       let message = process.env.NODE_ENV === "development" ? err.message : "Something went wrong";
 
@@ -249,12 +243,9 @@ async function startServer() {
       } else if (err.name === "MongoError") {
         status = 503;
         message = "Database service unavailable";
-      } else if (err.message.includes("FileNotFound") || err.message.includes("GridFS")) {
+      } else if (err.message.includes("FileNotFound")) {
         status = 404;
         message = "The requested file is not available";
-      } else if (err.message.includes("Invalid JSON payload")) {
-        status = 400;
-        message = "Invalid JSON payload";
       }
 
       res.status(status).json({ 
@@ -270,43 +261,28 @@ async function startServer() {
       console.log(`🌍 Allowed CORS origins: ${allowedOrigins.join(', ')}`);
     });
 
-    // Enhanced server shutdown handling
+    // Graceful shutdown
     const shutdown = async (signal) => {
       console.log(`🛑 Received ${signal}, shutting down gracefully...`);
       
-      try {
-        // Close the server first
-        server.close(async () => {
-          console.log('🔒 HTTP server closed');
-          
-          // Close MongoDB connection
-          await mongoose.connection.close(false);
-          console.log('📦 MongoDB connection closed');
-          
-          process.exit(0);
-        });
+      server.close(async () => {
+        console.log('🔒 HTTP server closed');
+        await mongoose.connection.close(false);
+        console.log('📦 MongoDB connection closed');
+        process.exit(0);
+      });
 
-        // Force shutdown if graceful shutdown takes too long
-        setTimeout(() => {
-          console.error('⚠️ Forcing shutdown after timeout');
-          process.exit(1);
-        }, 10000);
-      } catch (err) {
-        console.error('❌ Error during shutdown:', err);
+      setTimeout(() => {
+        console.error('⚠️ Forcing shutdown after timeout');
         process.exit(1);
-      }
+      }, 10000);
     };
 
-    // Handle different shutdown signals
     process.on("SIGTERM", () => shutdown('SIGTERM'));
     process.on("SIGINT", () => shutdown('SIGINT'));
     process.on("unhandledRejection", (err) => {
       console.error('⚠️ Unhandled Rejection:', err);
       shutdown('unhandledRejection');
-    });
-    process.on("uncaughtException", (err) => {
-      console.error('⚠️ Uncaught Exception:', err);
-      shutdown('uncaughtException');
     });
 
   } catch (error) {
