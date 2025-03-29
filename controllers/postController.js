@@ -2,7 +2,6 @@ const Post = require('../models/Post');
 const mongoose = require('mongoose');
 const { GridFSBucket } = require('mongodb');
 
-// Fetch posts with optional filters
 exports.getPostsByPageAndSection = async (req, res) => {
   try {
     const { page, section } = req.query;
@@ -27,7 +26,6 @@ exports.getPostsByPageAndSection = async (req, res) => {
   }
 };
 
-// Create a new post
 exports.createPost = async (req, res) => {
   try {
     const { title, content, title_ar, content_ar, page, section, video } = req.body;
@@ -42,15 +40,14 @@ exports.createPost = async (req, res) => {
       title, content, title_ar, content_ar, page, section, imageId, video, pdfId
     });
 
-    await newPost.save();
-    res.status(201).json(newPost);
+    const savedPost = await newPost.save();
+    res.status(201).json(savedPost);
   } catch (err) {
     console.error('Error creating post:', err);
     res.status(500).json({ error: 'Failed to create post' });
   }
 };
 
-// Update an existing post
 exports.updatePost = async (req, res) => {
   try {
     const { id } = req.params;
@@ -67,6 +64,9 @@ exports.updatePost = async (req, res) => {
       return res.status(400).json({ error: 'Please provide either an image or a video.' });
     }
 
+    const oldImageId = post.imageId;
+    const oldPdfId = post.pdfId;
+
     Object.assign(post, {
       title: title || post.title,
       content: content || post.content,
@@ -80,6 +80,17 @@ exports.updatePost = async (req, res) => {
     });
 
     await post.save();
+
+    // Clean up old files if they were replaced
+    if (imageId && oldImageId) {
+      const bucket = new GridFSBucket(mongoose.connection.db, { bucketName: 'uploads' });
+      await bucket.delete(new mongoose.Types.ObjectId(oldImageId));
+    }
+    if (pdfId && oldPdfId) {
+      const bucket = new GridFSBucket(mongoose.connection.db, { bucketName: 'uploads' });
+      await bucket.delete(new mongoose.Types.ObjectId(oldPdfId));
+    }
+
     res.status(200).json(post);
   } catch (err) {
     console.error('Error updating post:', err);
@@ -87,7 +98,6 @@ exports.updatePost = async (req, res) => {
   }
 };
 
-// Delete a post and remove associated files from GridFS
 exports.deletePost = async (req, res) => {
   try {
     const { id } = req.params;
@@ -99,7 +109,6 @@ exports.deletePost = async (req, res) => {
       return res.status(404).json({ error: 'Post not found' });
     }
 
-    // Delete associated files from GridFS if they exist
     const deleteFile = async (fileId) => {
       if (fileId) {
         try {
