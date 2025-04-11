@@ -22,7 +22,7 @@ for (const envVar of requiredEnvVars) {
 // Initialize the application
 async function startServer() {
   try {
-    // Connect to MongoDB with retry logic
+    // Connect to MongoDB
     const connection = await connectDB();
     console.log("✅ MongoDB Atlas connected successfully");
 
@@ -33,14 +33,14 @@ async function startServer() {
     app.set("trust proxy", 1);
 
     // ====================== SECURITY CONFIGURATION ======================
-    const allowedOrigins = process.env.ALLOWED_ORIGINS 
-    ? process.env.ALLOWED_ORIGINS.split(',') 
-    : [
-        "https://irt-university-frontend.vercel.app",
-        "https://irt-university-frontend-*.vercel.app",
-        "http://localhost:3000"
-      ];
-    // Enhanced CSP configuration
+    const allowedOrigins = [
+      "https://irt-university-frontend.vercel.app",
+      "https://irt-university-frontend-*.vercel.app",
+      "http://localhost:3000",
+      "https://irt-university-backend.onrender.com" // Add backend domain for PDF embedding
+    ];
+
+    // Enhanced CSP configuration for PDF support
     app.use(
       helmet({
         contentSecurityPolicy: {
@@ -48,11 +48,12 @@ async function startServer() {
             ...helmet.contentSecurityPolicy.getDefaultDirectives(),
             "frame-ancestors": [
               "'self'",
-              ...allowedOrigins.filter(origin => origin.includes('http'))
+              ...allowedOrigins
             ],
-            "img-src": ["'self'", "data:", "blob:", "https://*.youtube.com", "https://via.placeholder.com"],
+            "img-src": ["'self'", "data:", "blob:", "https://*.youtube.com"],
             "media-src": ["'self'", "data:", "blob:"],
-            "connect-src": ["'self'", ...allowedOrigins]
+            "connect-src": ["'self'", ...allowedOrigins],
+            "object-src": ["'self'", "data:", "blob:"] // Required for PDF embedding
           }
         },
         crossOriginEmbedderPolicy: false,
@@ -73,61 +74,54 @@ async function startServer() {
     }
 
     // ====================== CORS CONFIGURATION ======================
-    // Replace your current CORS configuration with this:
-const corsOptions = {
-  origin: (origin, callback) => {
-    const allowedOrigins = [
-      "https://irt-university-frontend.vercel.app",
-      "https://irt-university-frontend-*.vercel.app",
-      "http://localhost:3000"
-    ];
+    const corsOptions = {
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true); // Allow direct file access
+        
+        const isAllowed = allowedOrigins.some(pattern => {
+          if (pattern.includes('*')) {
+            const regex = new RegExp(`^${pattern.replace(/\*/g, '.*')}$`);
+            return regex.test(origin);
+          }
+          return origin === pattern;
+        });
 
-    // Allow requests with no origin (like direct file access)
-    if (!origin) return callback(null, true);
+        callback(isAllowed ? null : new Error('Not allowed by CORS'), isAllowed);
+      },
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Range'],
+      exposedHeaders: [
+        'Content-Type',
+        'Content-Length',
+        'Content-Disposition',
+        'Accept-Ranges',
+        'Content-Range',
+        'X-Frame-Options' // Important for PDF embedding
+      ],
+      credentials: true,
+      maxAge: 86400
+    };
 
-    // Check allowed origins
-    const isAllowed = allowedOrigins.some(pattern => {
-      if (pattern.includes('*')) {
-        const regex = new RegExp(pattern.replace(/\*/g, '.*'));
-        return regex.test(origin);
+    app.use(cors(corsOptions));
+    app.options("*", cors(corsOptions));
+
+    // ====================== BODY PARSING ======================
+    app.use(express.json({ 
+      limit: "50mb",
+      verify: (req, res, buf) => {
+        try {
+          JSON.parse(buf.toString());
+        } catch (e) {
+          throw new Error("Invalid JSON payload");
+        }
       }
-      return origin === pattern;
-    });
-
-    callback(isAllowed ? null : new Error('Not allowed by CORS'), isAllowed);
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Range'],
-  exposedHeaders: [
-    'Content-Type',
-    'Content-Length',
-    'Content-Disposition',
-    'Accept-Ranges',
-    'Content-Range'
-  ],
-  credentials: true,
-  maxAge: 86400
-};
-
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Enable preflight for all routes
-
-app.use(express.json({
-  limit: '50mb',
-  verify: (req, res, buf) => {
-    try {
-      JSON.parse(buf.toString());
-    } catch (e) {
-      throw new Error('Invalid JSON');
-    }
-  }
-}));
-
-app.use(express.urlencoded({
-  extended: true,
-  limit: '50mb',
-  parameterLimit: 100000
-}));
+    }));
+    
+    app.use(express.urlencoded({ 
+      extended: true,
+      limit: "50mb",
+      parameterLimit: 100000
+    }));
 
     // ====================== RATE LIMITING ======================
     const apiLimiter = rateLimit({
@@ -142,23 +136,6 @@ app.use(express.urlencoded({
     });
 
     app.use("/api/", apiLimiter);
-
-    // ====================== MIDDLEWARE ======================
-    app.use(express.json({ 
-      limit: "10mb",
-      verify: (req, res, buf) => {
-        try {
-          JSON.parse(buf.toString());
-        } catch (e) {
-          throw new Error("Invalid JSON payload");
-        }
-      }
-    }));
-    
-    app.use(express.urlencoded({ 
-      extended: true,
-      limit: "10mb"
-    }));
 
     // Enhanced request logging
     app.use((req, res, next) => {
@@ -237,14 +214,6 @@ app.use(express.urlencoded({
         });
       }
 
-      // Handle invalid header errors
-      if (err.message.includes('Invalid character in header content')) {
-        return res.status(500).json({
-          error: "Server configuration error",
-          message: "Invalid CORS headers detected - please check server configuration"
-        });
-      }
-
       // Log the error
       console.error("🔥 ERROR:", {
         message: err.message,
@@ -258,17 +227,6 @@ app.use(express.urlencoded({
       // Determine status code and message
       let status = err.statusCode || 500;
       let message = process.env.NODE_ENV === "development" ? err.message : "Something went wrong";
-
-      if (err.name === "ValidationError") {
-        status = 400;
-        message = "Validation Error";
-      } else if (err.name === "MongoError") {
-        status = 503;
-        message = "Database service unavailable";
-      } else if (err.message.includes("FileNotFound")) {
-        status = 404;
-        message = "The requested file is not available";
-      }
 
       res.status(status).json({ 
         error: message,

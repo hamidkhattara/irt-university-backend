@@ -72,11 +72,13 @@ router.get('/:id', async (req, res) => {
       return res.status(400).json({ error: 'Invalid file ID' });
     }
 
-    const bucket = new GridFSBucket(mongoose.connection.db, { bucketName: 'uploads' });
-    const fileId = new mongoose.Types.ObjectId(id);
+    const bucket = new GridFSBucket(mongoose.connection.db, { 
+      bucketName: 'uploads',
+      chunkSizeBytes: 255 * 1024 // Optimize for PDF streaming
+    });
 
-    const cursor = bucket.find({ _id: fileId });
-    const files = await cursor.toArray();
+    const fileId = new mongoose.Types.ObjectId(id);
+    const files = await bucket.find({ _id: fileId }).toArray();
 
     if (!files.length) {
       console.log(`File not found: ${id}`);
@@ -86,21 +88,29 @@ router.get('/:id', async (req, res) => {
     const file = files[0];
     console.log(`Serving file: ${file.filename} (${file.contentType})`);
 
-    // Set headers
+    // Set base headers
     const headers = {
       'Content-Type': file.contentType || 'application/octet-stream',
       'Content-Length': file.length,
-      'Cache-Control': 'public, max-age=31536000', // 1 year
+      'Cache-Control': 'public, max-age=31536000',
       'Accept-Ranges': 'bytes',
       'Access-Control-Expose-Headers': 'Content-Disposition, Content-Type, Content-Length'
     };
 
-    // Special handling for different file types
+    // Special handling for PDFs
     if (file.contentType === 'application/pdf') {
       headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
-    } else if (file.contentType.startsWith('image/')) {
+      headers['Content-Type'] = 'application/pdf';
+      headers['X-Content-Type-Options'] = 'nosniff';
+      headers['X-Frame-Options'] = 'ALLOW-FROM https://irt-university-frontend.vercel.app';
+      headers['Content-Security-Policy'] = "frame-ancestors 'self' https://irt-university-frontend.vercel.app";
+    } 
+    // Handling for images
+    else if (file.contentType.startsWith('image/')) {
       headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
-    } else {
+    } 
+    // Default for other files
+    else {
       headers['Content-Disposition'] = `attachment; filename="${encodeURIComponent(file.filename)}"`;
     }
 
