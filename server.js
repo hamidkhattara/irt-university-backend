@@ -113,6 +113,18 @@ app.use((req, res, next) => {
     app.use(cors(corsOptions));
     app.options("*", cors(corsOptions));
 
+
+    // Add this right after your CORS configuration
+app.use((req, res, next) => {
+  // Only apply CSP to file routes
+  if (req.path.startsWith('/api/files/')) {
+    res.setHeader("Content-Security-Policy", 
+      "frame-ancestors 'self' https://irt-university-frontend.vercel.app https://irt-university-frontend-*.vercel.app http://localhost:3000 https://irt-university-backend.onrender.com; " +
+      "object-src 'self' blob:;"
+    );
+  }
+  next();
+});
     // ====================== BODY PARSING ======================
     app.use(express.json({ 
       limit: "50mb",
