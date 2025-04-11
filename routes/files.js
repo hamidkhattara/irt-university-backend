@@ -3,53 +3,60 @@ const mongoose = require('mongoose');
 const { GridFSBucket } = require('mongodb');
 const router = express.Router();
 
-// Helper function to validate file IDs
+// Enhanced ObjectID validation
 const isValidObjectId = (id) => {
+  if (!mongoose.Types.ObjectId.isValid(id)) return false;
   try {
-    return mongoose.Types.ObjectId.isValid(id) && 
-           new mongoose.Types.ObjectId(id).toString() === id;
-  } catch (err) {
+    return new mongoose.Types.ObjectId(id).toString() === id;
+  } catch {
     return false;
   }
 };
+
+// Middleware to check DB connection
+router.use((req, res, next) => {
+  if (mongoose.connection.readyState !== 1) {
+    console.error('Database connection not ready');
+    return res.status(503).json({ error: 'Database service unavailable' });
+  }
+  next();
+});
 
 // Get file metadata
 router.get('/meta/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
+    console.log(`Metadata request for file: ${id}`);
+
     if (!isValidObjectId(id)) {
-      return res.status(400).json({ error: 'Invalid file ID format' });
+      return res.status(400).json({ error: 'Invalid file ID' });
     }
 
-    const conn = mongoose.connection;
-    if (conn.readyState !== 1) {
-      return res.status(503).json({ error: 'Database not connected' });
-    }
-
-    const bucket = new GridFSBucket(conn.db, { bucketName: 'uploads' });
+    const bucket = new GridFSBucket(mongoose.connection.db, { bucketName: 'uploads' });
     const fileId = new mongoose.Types.ObjectId(id);
 
-    const files = await bucket.find({ _id: fileId }).toArray();
-    if (files.length === 0) {
+    const cursor = bucket.find({ _id: fileId });
+    const files = await cursor.toArray();
+
+    if (!files.length) {
+      console.log(`File not found: ${id}`);
       return res.status(404).json({ error: 'File not found' });
     }
 
-    const file = files[0];
-    
-    // Return metadata without the file content
+    const { _id, filename, contentType, length, uploadDate, metadata } = files[0];
     res.json({
-      id: file._id,
-      filename: file.filename,
-      contentType: file.contentType,
-      length: file.length,
-      uploadDate: file.uploadDate,
-      metadata: file.metadata
+      id: _id,
+      filename,
+      contentType,
+      size: length,
+      uploadDate,
+      metadata
     });
+
   } catch (error) {
-    console.error('File metadata error:', error);
+    console.error('Metadata error:', error);
     res.status(500).json({ 
-      error: 'Internal server error',
+      error: 'Server error',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -59,56 +66,61 @@ router.get('/meta/:id', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(`File request for: ${id}`);
 
     if (!isValidObjectId(id)) {
-      return res.status(400).json({ error: 'Invalid file ID format' });
+      return res.status(400).json({ error: 'Invalid file ID' });
     }
 
-    const conn = mongoose.connection;
-    if (conn.readyState !== 1) {
-      return res.status(503).json({ error: 'Database not connected' });
-    }
-
-    const bucket = new GridFSBucket(conn.db, { bucketName: 'uploads' });
+    const bucket = new GridFSBucket(mongoose.connection.db, { bucketName: 'uploads' });
     const fileId = new mongoose.Types.ObjectId(id);
 
-    const files = await bucket.find({ _id: fileId }).toArray();
-    if (files.length === 0) {
+    const cursor = bucket.find({ _id: fileId });
+    const files = await cursor.toArray();
+
+    if (!files.length) {
+      console.log(`File not found: ${id}`);
       return res.status(404).json({ error: 'File not found' });
     }
 
     const file = files[0];
-    
-    // Set proper headers based on file type
+    console.log(`Serving file: ${file.filename} (${file.contentType})`);
+
+    // Set headers
     const headers = {
       'Content-Type': file.contentType || 'application/octet-stream',
-      'Content-Disposition': `inline; filename="${encodeURIComponent(file.filename)}"`,
       'Content-Length': file.length,
       'Cache-Control': 'public, max-age=31536000', // 1 year
-      'Access-Control-Expose-Headers': 'Content-Disposition, Content-Length'
+      'Accept-Ranges': 'bytes',
+      'Access-Control-Expose-Headers': 'Content-Disposition, Content-Type, Content-Length'
     };
 
-    // Special handling for PDFs
+    // Special handling for different file types
     if (file.contentType === 'application/pdf') {
       headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
+    } else if (file.contentType.startsWith('image/')) {
+      headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
+    } else {
+      headers['Content-Disposition'] = `attachment; filename="${encodeURIComponent(file.filename)}"`;
     }
 
     res.set(headers);
 
     const downloadStream = bucket.openDownloadStream(fileId);
     
-    downloadStream.on('error', (err) => {
-      console.error('Stream error:', err);
+    downloadStream.on('error', (error) => {
+      console.error('Stream error:', error);
       if (!res.headersSent) {
-        res.status(404).json({ error: 'File not found' });
+        res.status(500).json({ error: 'File streaming failed' });
       }
     });
 
     downloadStream.pipe(res);
+
   } catch (error) {
     console.error('File serving error:', error);
     res.status(500).json({ 
-      error: 'Internal server error',
+      error: 'Server error',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -118,30 +130,23 @@ router.get('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(`Delete request for file: ${id}`);
 
     if (!isValidObjectId(id)) {
-      return res.status(400).json({ error: 'Invalid file ID format' });
+      return res.status(400).json({ error: 'Invalid file ID' });
     }
 
-    const conn = mongoose.connection;
-    if (conn.readyState !== 1) {
-      return res.status(503).json({ error: 'Database not connected' });
-    }
-
-    const bucket = new GridFSBucket(conn.db, { bucketName: 'uploads' });
+    const bucket = new GridFSBucket(mongoose.connection.db, { bucketName: 'uploads' });
     const fileId = new mongoose.Types.ObjectId(id);
 
-    const files = await bucket.find({ _id: fileId }).toArray();
-    if (files.length === 0) {
-      return res.status(404).json({ error: 'File not found' });
-    }
-
     await bucket.delete(fileId);
+    console.log(`File deleted: ${id}`);
     res.json({ message: 'File deleted successfully' });
+
   } catch (error) {
-    console.error('File deletion error:', error);
+    console.error('Deletion error:', error);
     res.status(500).json({ 
-      error: 'Internal server error',
+      error: 'Server error',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

@@ -73,57 +73,61 @@ async function startServer() {
     }
 
     // ====================== CORS CONFIGURATION ======================
-    const corsOptions = {
-      origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps, curl, or server-to-server)
-        if (!origin) {
-          // In production, you might want to be more restrictive
-          if (process.env.NODE_ENV === 'production') {
-            console.warn('⚠️ No origin header in production request');
-            return callback(new Error('Origin header required in production'));
-          }
-          return callback(null, true);
-        }
-        
-        // Check against allowed origins
-        const originAllowed = allowedOrigins.some(pattern => {
-          if (pattern.includes('*')) {
-            const regex = new RegExp(pattern.replace(/\*/g, '.*'));
-            return regex.test(origin);
-          }
-          return origin === pattern;
-        });
-    
-        if (originAllowed) {
-          return callback(null, true);
-        }
-        
-        console.warn(`❌ CORS blocked: ${origin}`);
-        callback(new Error('Not allowed by CORS'));
-      },
-      methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-      allowedHeaders: [
-        "Content-Type", 
-        "Authorization", 
-        "X-Requested-With",
-        "Accept",
-        "Origin",
-        "Range"
-      ],
-      exposedHeaders: [
-        "Content-Length",
-        "Content-Range",
-        "X-Content-Range",
-        "Accept-Ranges",
-        "Content-Disposition",
-        "X-Filename"
-      ],
-      credentials: true,
-      maxAge: 86400
-    };
+    // Replace your current CORS configuration with this:
+const corsOptions = {
+  origin: (origin, callback) => {
+    const allowedOrigins = [
+      "https://irt-university-frontend.vercel.app",
+      "https://irt-university-frontend-*.vercel.app",
+      "http://localhost:3000"
+    ];
 
-    app.use(cors(corsOptions));
-    app.options("*", cors(corsOptions));
+    // Allow requests with no origin (like direct file access)
+    if (!origin) return callback(null, true);
+
+    // Check allowed origins
+    const isAllowed = allowedOrigins.some(pattern => {
+      if (pattern.includes('*')) {
+        const regex = new RegExp(pattern.replace(/\*/g, '.*'));
+        return regex.test(origin);
+      }
+      return origin === pattern;
+    });
+
+    callback(isAllowed ? null : new Error('Not allowed by CORS'), isAllowed);
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Range'],
+  exposedHeaders: [
+    'Content-Type',
+    'Content-Length',
+    'Content-Disposition',
+    'Accept-Ranges',
+    'Content-Range'
+  ],
+  credentials: true,
+  maxAge: 86400
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Enable preflight for all routes
+
+app.use(express.json({
+  limit: '50mb',
+  verify: (req, res, buf) => {
+    try {
+      JSON.parse(buf.toString());
+    } catch (e) {
+      throw new Error('Invalid JSON');
+    }
+  }
+}));
+
+app.use(express.urlencoded({
+  extended: true,
+  limit: '50mb',
+  parameterLimit: 100000
+}));
 
     // ====================== RATE LIMITING ======================
     const apiLimiter = rateLimit({
