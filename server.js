@@ -41,41 +41,30 @@ async function startServer() {
     ];
 
     // Dynamic Helmet middleware
-    app.use((req, res, next) => {
-      if (req.path.startsWith('/api/files/')) {
-        // Special configuration for file routes
-        helmet({
-          contentSecurityPolicy: {
-            directives: {
-              ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-              "frame-ancestors": ["'self'", ...allowedOrigins],
-              "object-src": ["'self'", "blob:"],
-              "img-src": ["'self'", "data:", "blob:"],
-              "media-src": ["'self'", "data:", "blob:"]
-            }
-          },
-          crossOriginEmbedderPolicy: false,
-          crossOriginResourcePolicy: { policy: "cross-origin" }
-        })(req, res, next);
-      } else {
-        // Standard security for other routes
-        helmet({
-          contentSecurityPolicy: {
-            directives: {
-              ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-              "frame-ancestors": ["'self'", ...allowedOrigins],
-              "img-src": ["'self'", "data:", "blob:", "https://*.youtube.com"],
-              "media-src": ["'self'", "data:", "blob:"],
-              "connect-src": ["'self'", ...allowedOrigins],
-              "object-src": ["'self'", "data:", "blob:"]
-            }
-          },
-          crossOriginEmbedderPolicy: false,
-          crossOriginResourcePolicy: { policy: "cross-origin" }
-        })(req, res, next);
-      }
-    });
+   // Replace the helmet middleware with this:
+app.use((req, res, next) => {
+  const dynamicCsp = {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      "frame-ancestors": [
+        "'self'",
+        "https://irt-university-frontend.vercel.app",
+        "https://irt-university-frontend-*.vercel.app",
+        "http://localhost:3000",
+        "https://irt-university-backend.onrender.com"
+      ],
+      "object-src": ["'self'", "blob:"],
+      "img-src": ["'self'", "data:", "blob:"],
+      "media-src": ["'self'", "data:", "blob:"]
+    }
+  };
 
+  helmet({
+    contentSecurityPolicy: dynamicCsp,
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+  })(req, res, next);
+});
     app.disable("x-powered-by");
 
     // Force HTTPS in production
