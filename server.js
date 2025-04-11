@@ -196,13 +196,14 @@ async function startServer() {
 
     // Serve static files in production
     if (process.env.NODE_ENV === 'production') {
-      app.use(express.static(path.join(__dirname, 'client/build')));
-      
-      app.get('*', (req, res) => {
-        res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
+      // Optional: Add a health check or redirect
+      app.get('/', (req, res) => {
+        res.status(200).json({ 
+          message: "Backend is running",
+          docs: "https://github.com/hamidkhattara/irt-university-backend" 
+        });
       });
     }
-
     // ====================== ERROR HANDLING ======================
     // 404 Handler
     app.use((req, res) => {
