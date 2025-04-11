@@ -40,27 +40,29 @@ async function startServer() {
       "https://irt-university-backend.onrender.com"
     ];
 
-// Update your helmet middleware in server.js
+// Replace your helmet middleware with this:
 app.use((req, res, next) => {
+  const allowedDomains = [
+    "'self'",
+    "https://irt-university-frontend.vercel.app",
+    "https://irt-university-frontend-*.vercel.app",
+    "http://localhost:3000",
+    "https://irt-university-backend.onrender.com"
+  ];
+
+  // Special handling for PDF files
   if (req.path.startsWith('/api/files/')) {
-    // Special configuration for file routes
     helmet({
       contentSecurityPolicy: {
         directives: {
           ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-          "frame-ancestors": [
-            "'self'",
-            "https://irt-university-frontend.vercel.app",
-            "https://irt-university-frontend-*.vercel.app",
-            "http://localhost:3000",
-            "https://irt-university-backend.onrender.com"
-          ],
+          "frame-ancestors": allowedDomains,
           "object-src": ["'self'", "blob:"]
         }
       },
       crossOriginEmbedderPolicy: false,
       crossOriginResourcePolicy: { policy: "cross-origin" },
-      frameguard: false // Disable X-Frame-Options since we're using CSP frame-ancestors
+      frameguard: false // Disable X-Frame-Options
     })(req, res, next);
   } else {
     // Standard security for other routes

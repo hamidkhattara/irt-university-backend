@@ -96,15 +96,14 @@ router.get('/:id', async (req, res) => {
       'Accept-Ranges': 'bytes'
     };
 
-// In your file serving route (~line 50), update the PDF headers section to:
+// In your file serving route, ensure these headers:
 if (file.contentType === 'application/pdf') {
   headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
   headers['Content-Type'] = 'application/pdf';
   headers['Access-Control-Allow-Origin'] = '*';
-  headers['Access-Control-Expose-Headers'] = '*'; // Changed from specific headers
-  headers['X-Content-Type-Options'] = 'nosniff';
+  headers['Access-Control-Expose-Headers'] = '*';
   
-  // Remove any restrictive headers
+  // Remove any conflicting headers
   delete headers['X-Frame-Options'];
 }
     // Handling for images
