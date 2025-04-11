@@ -42,29 +42,39 @@ async function startServer() {
 
     // Dynamic Helmet middleware
    // Replace the helmet middleware with this:
-app.use((req, res, next) => {
-  const dynamicCsp = {
-    directives: {
-      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-      "frame-ancestors": [
-        "'self'",
-        "https://irt-university-frontend.vercel.app",
-        "https://irt-university-frontend-*.vercel.app",
-        "http://localhost:3000",
-        "https://irt-university-backend.onrender.com"
-      ],
-      "object-src": ["'self'", "blob:"],
-      "img-src": ["'self'", "data:", "blob:"],
-      "media-src": ["'self'", "data:", "blob:"]
+   app.use((req, res, next) => {
+    if (req.path.startsWith('/api/files/')) {
+      // Special relaxed security for file routes
+      helmet({
+        contentSecurityPolicy: {
+          directives: {
+            defaultSrc: ["'self'"],
+            frameSrc: ["'self'", ...allowedOrigins, "blob:"],
+            frameAncestors: ["'self'", ...allowedOrigins],
+            objectSrc: ["'none'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", "data:", "blob:"],
+            mediaSrc: ["'self'", "data:", "blob:"],
+            connectSrc: ["'self'", ...allowedOrigins]
+          }
+        },
+        crossOriginEmbedderPolicy: false,
+        crossOriginResourcePolicy: { policy: "cross-origin" },
+        frameguard: { action: 'allow-from', domain: allowedOrigins.join(' ') }
+      })(req, res, next);
+    } else {
+      // Standard security for other routes
+      helmet({
+        contentSecurityPolicy: {
+          directives: {
+            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+            "frame-ancestors": ["'self'", ...allowedOrigins]
+          }
+        }
+      })(req, res, next);
     }
-  };
-
-  helmet({
-    contentSecurityPolicy: dynamicCsp,
-    crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: { policy: "cross-origin" }
-  })(req, res, next);
-});
+  });
     app.disable("x-powered-by");
 
     // Force HTTPS in production
