@@ -40,41 +40,33 @@ async function startServer() {
       "https://irt-university-backend.onrender.com"
     ];
 
-    // Dynamic Helmet middleware
-   // Replace the helmet middleware with this:
-   app.use((req, res, next) => {
-    if (req.path.startsWith('/api/files/')) {
-      // Special relaxed security for file routes
-      helmet({
-        contentSecurityPolicy: {
-          directives: {
-            defaultSrc: ["'self'"],
-            frameSrc: ["'self'", ...allowedOrigins, "blob:"],
-            frameAncestors: ["'self'", ...allowedOrigins],
-            objectSrc: ["'none'"],
-            scriptSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            imgSrc: ["'self'", "data:", "blob:"],
-            mediaSrc: ["'self'", "data:", "blob:"],
-            connectSrc: ["'self'", ...allowedOrigins]
-          }
-        },
-        crossOriginEmbedderPolicy: false,
-        crossOriginResourcePolicy: { policy: "cross-origin" },
-        frameguard: { action: 'allow-from', domain: allowedOrigins.join(' ') }
-      })(req, res, next);
-    } else {
-      // Standard security for other routes
-      helmet({
-        contentSecurityPolicy: {
-          directives: {
-            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-            "frame-ancestors": ["'self'", ...allowedOrigins]
-          }
+// Update your helmet middleware in server.js
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/files/')) {
+    // Special configuration for file routes
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+          "frame-ancestors": [
+            "'self'",
+            "https://irt-university-frontend.vercel.app",
+            "https://irt-university-frontend-*.vercel.app",
+            "http://localhost:3000",
+            "https://irt-university-backend.onrender.com"
+          ],
+          "object-src": ["'self'", "blob:"]
         }
-      })(req, res, next);
-    }
-  });
+      },
+      crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: { policy: "cross-origin" },
+      frameguard: false // Disable X-Frame-Options since we're using CSP frame-ancestors
+    })(req, res, next);
+  } else {
+    // Standard security for other routes
+    helmet()(req, res, next);
+  }
+});
     app.disable("x-powered-by");
 
     // Force HTTPS in production
