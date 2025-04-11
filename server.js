@@ -37,27 +37,33 @@ async function startServer() {
       "https://irt-university-frontend.vercel.app",
       "https://irt-university-frontend-*.vercel.app",
       "http://localhost:3000",
-      "https://irt-university-backend.onrender.com" // Add backend domain for PDF embedding
+      "https://irt-university-backend.onrender.com"
     ];
 
-    // Enhanced CSP configuration for PDF support
+    // Dynamic Helmet middleware
     app.use((req, res, next) => {
-      // Bypass CSP for PDF files
-      if (req.path.startsWith('/api/files/') && req.query.type === 'pdf') {
-        helmet({
-          contentSecurityPolicy: false, // Disable CSP completely for PDF requests
-          crossOriginEmbedderPolicy: false,
-          crossOriginResourcePolicy: { policy: "cross-origin" }
-        })(req, res, next);
-      } else {
+      if (req.path.startsWith('/api/files/')) {
+        // Special configuration for file routes
         helmet({
           contentSecurityPolicy: {
             directives: {
               ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-              "frame-ancestors": [
-                "'self'",
-                ...allowedOrigins
-              ],
+              "frame-ancestors": ["'self'", ...allowedOrigins],
+              "object-src": ["'self'", "blob:"],
+              "img-src": ["'self'", "data:", "blob:"],
+              "media-src": ["'self'", "data:", "blob:"]
+            }
+          },
+          crossOriginEmbedderPolicy: false,
+          crossOriginResourcePolicy: { policy: "cross-origin" }
+        })(req, res, next);
+      } else {
+        // Standard security for other routes
+        helmet({
+          contentSecurityPolicy: {
+            directives: {
+              ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+              "frame-ancestors": ["'self'", ...allowedOrigins],
               "img-src": ["'self'", "data:", "blob:", "https://*.youtube.com"],
               "media-src": ["'self'", "data:", "blob:"],
               "connect-src": ["'self'", ...allowedOrigins],
@@ -85,7 +91,7 @@ async function startServer() {
     // ====================== CORS CONFIGURATION ======================
     const corsOptions = {
       origin: (origin, callback) => {
-        if (!origin) return callback(null, true); // Allow direct file access
+        if (!origin) return callback(null, true);
         
         const isAllowed = allowedOrigins.some(pattern => {
           if (pattern.includes('*')) {
@@ -105,7 +111,7 @@ async function startServer() {
         'Content-Disposition',
         'Accept-Ranges',
         'Content-Range',
-        'X-Frame-Options' // Important for PDF embedding
+        'X-Frame-Options'
       ],
       credentials: true,
       maxAge: 86400
@@ -196,7 +202,6 @@ async function startServer() {
 
     // Serve static files in production
     if (process.env.NODE_ENV === 'production') {
-      // Optional: Add a health check or redirect
       app.get('/', (req, res) => {
         res.status(200).json({ 
           message: "Backend is running",
@@ -204,6 +209,7 @@ async function startServer() {
         });
       });
     }
+
     // ====================== ERROR HANDLING ======================
     // 404 Handler
     app.use((req, res) => {
@@ -215,7 +221,6 @@ async function startServer() {
 
     // Main error handler
     app.use((err, req, res, next) => {
-      // Handle CORS errors
       if (err.message === 'Not allowed by CORS') {
         return res.status(403).json({ 
           error: "CORS not allowed",
@@ -224,7 +229,6 @@ async function startServer() {
         });
       }
 
-      // Log the error
       console.error("🔥 ERROR:", {
         message: err.message,
         stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
@@ -234,12 +238,8 @@ async function startServer() {
         timestamp: new Date().toISOString()
       });
 
-      // Determine status code and message
-      let status = err.statusCode || 500;
-      let message = process.env.NODE_ENV === "development" ? err.message : "Something went wrong";
-
-      res.status(status).json({ 
-        error: message,
+      res.status(err.statusCode || 500).json({ 
+        error: process.env.NODE_ENV === "development" ? err.message : "Something went wrong",
         ...(process.env.NODE_ENV === "development" && { details: err.stack })
       });
     });

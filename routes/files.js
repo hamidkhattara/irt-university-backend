@@ -74,7 +74,7 @@ router.get('/:id', async (req, res) => {
 
     const bucket = new GridFSBucket(mongoose.connection.db, { 
       bucketName: 'uploads',
-      chunkSizeBytes: 255 * 1024 // Optimize for PDF streaming
+      chunkSizeBytes: 255 * 1024
     });
 
     const fileId = new mongoose.Types.ObjectId(id);
@@ -88,30 +88,21 @@ router.get('/:id', async (req, res) => {
     const file = files[0];
     console.log(`Serving file: ${file.filename} (${file.contentType})`);
 
-    // Set base headers
+    // Base headers for all files
     const headers = {
       'Content-Type': file.contentType || 'application/octet-stream',
       'Content-Length': file.length,
       'Cache-Control': 'public, max-age=31536000',
-      'Accept-Ranges': 'bytes',
-      'Access-Control-Expose-Headers': 'Content-Disposition, Content-Type, Content-Length'
+      'Accept-Ranges': 'bytes'
     };
 
     // Special handling for PDFs
-    // In the file content route, modify JUST the PDF headers section:
-   if (file.contentType === 'application/pdf') {
-     headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
-     headers['Content-Type'] = 'application/pdf';
-   
-  // Remove all restrictive headers for PDFs
-  delete headers['X-Frame-Options'];
-  delete headers['Content-Security-Policy'];
-  
-  // Add these permissive headers only for PDFs
-  headers['Access-Control-Allow-Origin'] = '*';
-  headers['Access-Control-Expose-Headers'] = '*';
-  headers['Access-Control-Allow-Methods'] = 'GET';
-
+    if (file.contentType === 'application/pdf') {
+      headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
+      headers['Content-Type'] = 'application/pdf';
+      headers['Access-Control-Allow-Origin'] = '*';
+      headers['Access-Control-Expose-Headers'] = '*';
+      headers['X-Frame-Options'] = 'ALLOW-FROM https://irt-university-frontend.vercel.app';
     } 
     // Handling for images
     else if (file.contentType.startsWith('image/')) {
