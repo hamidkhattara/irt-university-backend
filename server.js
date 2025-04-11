@@ -41,25 +41,34 @@ async function startServer() {
     ];
 
     // Enhanced CSP configuration for PDF support
-    app.use(
-      helmet({
-        contentSecurityPolicy: {
-          directives: {
-            ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-            "frame-ancestors": [
-              "'self'",
-              ...allowedOrigins
-            ],
-            "img-src": ["'self'", "data:", "blob:", "https://*.youtube.com"],
-            "media-src": ["'self'", "data:", "blob:"],
-            "connect-src": ["'self'", ...allowedOrigins],
-            "object-src": ["'self'", "data:", "blob:"] // Required for PDF embedding
-          }
-        },
-        crossOriginEmbedderPolicy: false,
-        crossOriginResourcePolicy: { policy: "cross-origin" }
-      })
-    );
+    app.use((req, res, next) => {
+      // Bypass CSP for PDF files
+      if (req.path.startsWith('/api/files/') && req.query.type === 'pdf') {
+        helmet({
+          contentSecurityPolicy: false, // Disable CSP completely for PDF requests
+          crossOriginEmbedderPolicy: false,
+          crossOriginResourcePolicy: { policy: "cross-origin" }
+        })(req, res, next);
+      } else {
+        helmet({
+          contentSecurityPolicy: {
+            directives: {
+              ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+              "frame-ancestors": [
+                "'self'",
+                ...allowedOrigins
+              ],
+              "img-src": ["'self'", "data:", "blob:", "https://*.youtube.com"],
+              "media-src": ["'self'", "data:", "blob:"],
+              "connect-src": ["'self'", ...allowedOrigins],
+              "object-src": ["'self'", "data:", "blob:"]
+            }
+          },
+          crossOriginEmbedderPolicy: false,
+          crossOriginResourcePolicy: { policy: "cross-origin" }
+        })(req, res, next);
+      }
+    });
 
     app.disable("x-powered-by");
 

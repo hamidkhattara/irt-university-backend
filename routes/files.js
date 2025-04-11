@@ -98,12 +98,20 @@ router.get('/:id', async (req, res) => {
     };
 
     // Special handling for PDFs
-    if (file.contentType === 'application/pdf') {
-      headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
-      headers['Content-Type'] = 'application/pdf';
-      headers['X-Content-Type-Options'] = 'nosniff';
-      headers['X-Frame-Options'] = 'ALLOW-FROM https://irt-university-frontend.vercel.app';
-      headers['Content-Security-Policy'] = "frame-ancestors 'self' https://irt-university-frontend.vercel.app";
+    // In the file content route, modify JUST the PDF headers section:
+   if (file.contentType === 'application/pdf') {
+     headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
+     headers['Content-Type'] = 'application/pdf';
+   
+  // Remove all restrictive headers for PDFs
+  delete headers['X-Frame-Options'];
+  delete headers['Content-Security-Policy'];
+  
+  // Add these permissive headers only for PDFs
+  headers['Access-Control-Allow-Origin'] = '*';
+  headers['Access-Control-Expose-Headers'] = '*';
+  headers['Access-Control-Allow-Methods'] = 'GET';
+
     } 
     // Handling for images
     else if (file.contentType.startsWith('image/')) {
