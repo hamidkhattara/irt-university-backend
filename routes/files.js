@@ -96,14 +96,15 @@ router.get('/:id', async (req, res) => {
       'Accept-Ranges': 'bytes'
     };
 
-// Update the PDF headers section in files.js
-if (file.contentType === 'application/pdf' || req.query.type === 'pdf') {
+// In your file serving route (~line 50), update the PDF headers section to:
+if (file.contentType === 'application/pdf') {
   headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
   headers['Content-Type'] = 'application/pdf';
   headers['Access-Control-Allow-Origin'] = '*';
-  headers['Access-Control-Expose-Headers'] = 'Content-Disposition, Content-Type';
+  headers['Access-Control-Expose-Headers'] = '*'; // Changed from specific headers
+  headers['X-Content-Type-Options'] = 'nosniff';
   
-  // Remove any conflicting headers
+  // Remove any restrictive headers
   delete headers['X-Frame-Options'];
 }
     // Handling for images
