@@ -114,17 +114,18 @@ app.use((req, res, next) => {
     app.options("*", cors(corsOptions));
 
 
-    // Add this right after your CORS configuration
+// Add this right after your CORS middleware
 app.use((req, res, next) => {
-  // Only apply CSP to file routes
   if (req.path.startsWith('/api/files/')) {
-    res.setHeader("Content-Security-Policy", 
+    res.setHeader(
+      "Content-Security-Policy",
       "frame-ancestors 'self' https://irt-university-frontend.vercel.app https://irt-university-frontend-*.vercel.app http://localhost:3000 https://irt-university-backend.onrender.com; " +
-      "object-src 'self' blob:;"
+      "object-src 'self' blob: data:;"
     );
+    res.removeHeader("X-Frame-Options"); // Remove conflicting header
   }
   next();
-});
+});;
     // ====================== BODY PARSING ======================
     app.use(express.json({ 
       limit: "50mb",
