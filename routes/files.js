@@ -96,16 +96,19 @@ router.get('/:id', async (req, res) => {
       'Accept-Ranges': 'bytes'
     };
 
-// In your file serving route, ensure these headers:
-if (file.contentType === 'application/pdf') {
-  headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
-  headers['Content-Type'] = 'application/pdf';
-  headers['Access-Control-Allow-Origin'] = '*';
-  headers['Access-Control-Expose-Headers'] = '*';
-  headers['Content-Security-Policy'] = "frame-ancestors 'self' https://irt-university-frontend.vercel.app http://localhost:3000 https://irt-university-backend.onrender.com https://irt-university-frontend-[a-zA-Z0-9-]+.vercel.app";
-  
-  delete headers['X-Frame-Options'];
-}
+    if (file.contentType === 'application/pdf') {
+      headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
+      headers['Content-Type'] = 'application/pdf';
+      headers['Access-Control-Allow-Origin'] = '*';
+      headers['Access-Control-Expose-Headers'] = '*';
+      headers['Content-Security-Policy'] =
+        "frame-ancestors 'self' https://irt-university-frontend.vercel.app http://localhost:3000 https://irt-university-backend.onrender.com https://irt-university-frontend-[a-zA-Z0-9-]+.vercel.app";
+      
+      delete headers['X-Frame-Options'];
+    }
+    
+    res.set(headers);
+    
     // Handling for images
     else if (file.contentType.startsWith('image/')) {
       headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
