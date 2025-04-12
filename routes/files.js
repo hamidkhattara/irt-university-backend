@@ -102,8 +102,8 @@ if (file.contentType === 'application/pdf') {
   headers['Content-Type'] = 'application/pdf';
   headers['Access-Control-Allow-Origin'] = '*';
   headers['Access-Control-Expose-Headers'] = '*';
+  headers['Content-Security-Policy'] = "frame-ancestors 'self' https://irt-university-frontend.vercel.app http://localhost:3000 https://irt-university-backend.onrender.com https://irt-university-frontend-[a-zA-Z0-9-]+.vercel.app";
   
-  // Remove any conflicting headers
   delete headers['X-Frame-Options'];
 }
     // Handling for images
