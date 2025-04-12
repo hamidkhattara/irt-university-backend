@@ -100,13 +100,14 @@ router.get('/:id', async (req, res) => {
 if (file.contentType === 'application/pdf') {
   headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
   headers['Content-Type'] = 'application/pdf';
-  headers['Access-Control-Allow-Origin'] = '*';
-  headers['Access-Control-Expose-Headers'] = '*';
+  headers['Access-Control-Allow-Origin'] = '*';  // Ensure this matches your frontend domain
+  headers['Access-Control-Expose-Headers'] = '*';  // Allow the frontend to access the headers
   headers['Content-Security-Policy'] =
     "frame-ancestors 'self' https://irt-university-frontend.vercel.app http://localhost:3000 https://irt-university-backend.onrender.com https://irt-university-frontend-[a-zA-Z0-9-]+.vercel.app";
-  
-  delete headers['X-Frame-Options'];
+
+  delete headers['X-Frame-Options'];  // Remove conflicting header
 }
+
     // Handling for images
     else if (file.contentType.startsWith('image/')) {
       headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
