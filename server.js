@@ -45,30 +45,29 @@ app.use((req, res, next) => {
   const allowedDomains = [
     "'self'",
     "https://irt-university-frontend.vercel.app",
-    "https://irt-university-frontend-*.vercel.app",
     "http://localhost:3000",
     "https://irt-university-backend.onrender.com"
   ];
 
-  // Special handling for PDF files
+  // For files like PDFs
   if (req.path.startsWith('/api/files/')) {
     helmet({
       contentSecurityPolicy: {
         directives: {
-          ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+          ...getDefaultDirectives(),
           "frame-ancestors": allowedDomains,
           "object-src": ["'self'", "blob:"]
         }
       },
       crossOriginEmbedderPolicy: false,
       crossOriginResourcePolicy: { policy: "cross-origin" },
-      frameguard: false // Disable X-Frame-Options
+      frameguard: false
     })(req, res, next);
   } else {
-    // Standard security for other routes
     helmet()(req, res, next);
   }
 });
+
     app.disable("x-powered-by");
 
     // Force HTTPS in production
