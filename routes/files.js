@@ -89,46 +89,45 @@ router.get('/:id', async (req, res) => {
     console.log(`Serving file: ${file.filename} (${file.contentType})`);
 
     // Base headers for all files
-    const headers = {
-      'Content-Type': file.contentType || 'application/octet-stream',
-      'Content-Length': file.length,
-      'Cache-Control': 'public, max-age=31536000',
-      'Accept-Ranges': 'bytes'
-    };
+ // Base headers for all files
+const headers = {
+  'Content-Type': file.contentType || 'application/octet-stream',
+  'Content-Length': file.length,
+  'Cache-Control': 'public, max-age=31536000',
+  'Accept-Ranges': 'bytes'
+};
 
-// In your file serving route, ensure these headers:
+// Custom for PDFs
 if (file.contentType === 'application/pdf') {
   headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
-  headers['Content-Type'] = 'application/pdf';
-  headers['Access-Control-Allow-Origin'] = '*';  // Ensure this matches your frontend domain
-  headers['Access-Control-Expose-Headers'] = '*';  // Allow the frontend to access the headers
   headers['Content-Security-Policy'] =
-    "frame-ancestors 'self' https://irt-university-frontend.vercel.app http://localhost:3000 https://irt-university-backend.onrender.com https://irt-university-frontend-[a-zA-Z0-9-]+.vercel.app";
-
-  delete headers['X-Frame-Options'];  // Remove conflicting header
+    "frame-ancestors 'self' https://irt-university-frontend.vercel.app https://*.vercel.app http://localhost:3000 https://irt-university-backend.onrender.com";
 }
 
-    // Handling for images
-    else if (file.contentType.startsWith('image/')) {
-      headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
-    } 
-    // Default for other files
-    else {
-      headers['Content-Disposition'] = `attachment; filename="${encodeURIComponent(file.filename)}"`;
-    }
+// Images
+else if (file.contentType.startsWith('image/')) {
+  headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
+}
 
-    res.set(headers);
+// Default for other files
+else {
+  headers['Content-Disposition'] = `attachment; filename="${encodeURIComponent(file.filename)}"`;
+}
 
-    const downloadStream = bucket.openDownloadStream(fileId);
-    
-    downloadStream.on('error', (error) => {
-      console.error('Stream error:', error);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'File streaming failed' });
-      }
-    });
+res.set(headers);
 
-    downloadStream.pipe(res);
+// Stream the file
+const downloadStream = bucket.openDownloadStream(fileId);
+
+downloadStream.on('error', (error) => {
+  console.error('Stream error:', error);
+  if (!res.headersSent) {
+    res.status(500).json({ error: 'File streaming failed' });
+  }
+});
+
+downloadStream.pipe(res);
+
 
   } catch (error) {
     console.error('File serving error:', error);
