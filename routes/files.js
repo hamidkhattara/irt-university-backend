@@ -100,8 +100,10 @@ const headers = {
 // Custom for PDFs
 if (file.contentType === 'application/pdf') {
   headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
-  headers['Content-Security-Policy'] =
-    "frame-ancestors 'self' https://irt-university-frontend.vercel.app https://*.vercel.app http://localhost:3000 https://irt-university-backend.onrender.com";
+  headers['Content-Security-Policy'] = "frame-ancestors 'self' https://*.vercel.app http://localhost:* https://irt-university-backend.onrender.com";
+  headers['X-Content-Type-Options'] = 'nosniff';
+  headers['Cross-Origin-Resource-Policy'] = 'cross-origin';
+  headers['Cross-Origin-Embedder-Policy'] = 'unsafe-none'; // Required for PDF.js in some cases
 }
 
 // Images
