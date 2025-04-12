@@ -3,6 +3,7 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const path = require("path");
 const helmet = require("helmet");
+const { getDefaultDirectives } = helmet.contentSecurityPolicy;
 const rateLimit = require("express-rate-limit");
 const mongoose = require("mongoose");
 const connectDB = require("./config/db");
@@ -40,34 +41,38 @@ async function startServer() {
       "https://irt-university-backend.onrender.com"
     ];
 
-// Replace your helmet middleware with this:
-app.use((req, res, next) => {
-  const allowedDomains = [
-    "'self'",
-    "https://irt-university-frontend.vercel.app",
-    "http://localhost:3000",
-    "https://irt-university-backend.onrender.com"
-  ];
-
-  // For files like PDFs
-  if (req.path.startsWith('/api/files/')) {
-    helmet({
-      contentSecurityPolicy: {
-        directives: {
-          ...getDefaultDirectives(),
-          "frame-ancestors": allowedDomains,
-          "object-src": ["'self'", "blob:"]
-        }
-      },
-      crossOriginEmbedderPolicy: false,
-      crossOriginResourcePolicy: { policy: "cross-origin" },
-      frameguard: false
-    })(req, res, next);
-  } else {
-    helmet()(req, res, next);
-  }
-});
-
+    app.use((req, res, next) => {
+      const origin = req.get("origin") || "";
+      const baseDomains = [
+        "'self'",
+        "https://irt-university-frontend.vercel.app",
+        "http://localhost:3000",
+        "https://irt-university-backend.onrender.com"
+      ];
+    
+      // Match preview domains like https://irt-university-frontend-abc123.vercel.app
+      if (/^https:\/\/irt-university-frontend-[\w-]+\.vercel\.app$/.test(origin)) {
+        baseDomains.push(origin);
+      }
+    
+      if (req.path.startsWith("/api/files/")) {
+        helmet({
+          contentSecurityPolicy: {
+            directives: {
+              ...getDefaultDirectives(),
+              "frame-ancestors": baseDomains,
+              "object-src": ["'self'", "blob:"]
+            }
+          },
+          crossOriginEmbedderPolicy: false,
+          crossOriginResourcePolicy: { policy: "cross-origin" },
+          frameguard: false
+        })(req, res, next);
+      } else {
+        helmet()(req, res, next);
+      }
+    });
+    
     app.disable("x-powered-by");
 
     // Force HTTPS in production
@@ -84,17 +89,13 @@ app.use((req, res, next) => {
     const corsOptions = {
       origin: (origin, callback) => {
         if (!origin) return callback(null, true);
-        
-        const isAllowed = allowedOrigins.some(pattern => {
-          if (pattern.includes('*')) {
-            const regex = new RegExp(`^${pattern.replace(/\*/g, '.*')}$`);
-            return regex.test(origin);
-          }
-          return origin === pattern;
-        });
-
-        callback(isAllowed ? null : new Error('Not allowed by CORS'), isAllowed);
+    
+        const isAllowed = allowedOrigins.some((domain) => origin === domain) ||
+          /^https:\/\/irt-university-frontend-[\w-]+\.vercel\.app$/.test(origin);
+    
+        callback(isAllowed ? null : new Error("Not allowed by CORS"), isAllowed);
       },
+    
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'Range'],
       exposedHeaders: [
