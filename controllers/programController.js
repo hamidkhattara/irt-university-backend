@@ -95,3 +95,27 @@ exports.deleteProgram = async (req, res) => {
     res.status(500).json({ error: 'Failed to delete program' });
   }
 };
+exports.getProgramsBySection = async (req, res) => {
+  try {
+    const { section } = req.params;
+    const baseUrl = `${req.protocol}://${req.get('host')}/api/files/`;
+
+    const allowedSections = ['innovation-labs', 'incubation-programs', 'funding-opportunities'];
+    if (!allowedSections.includes(section)) {
+      return res.status(400).json({ error: 'Invalid section provided' });
+    }
+
+    const programs = await Program.find({ section }).sort({ createdAt: -1 });
+    
+    const programsWithUrls = programs.map(program => ({
+      ...program.toObject(),
+      imageUrl: program.imageId ? `${baseUrl}${program.imageId}` : null,
+      pdfUrl: program.pdfId ? `${baseUrl}${program.pdfId}` : null,
+    }));
+
+    res.status(200).json(programsWithUrls);
+  } catch (err) {
+    console.error('Error fetching programs:', err);
+    res.status(500).json({ error: 'Failed to fetch programs' });
+  }
+};
