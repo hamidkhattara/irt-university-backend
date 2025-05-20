@@ -1,7 +1,6 @@
-// Add to all models (same structure as Post.js)
 const mongoose = require('mongoose');
 
-const schema = new mongoose.Schema({
+const newsEventSchema = new mongoose.Schema({
   title: {
     type: String,
     required: [true, 'Title is required'],
@@ -10,48 +9,99 @@ const schema = new mongoose.Schema({
   },
   description: {
     type: String,
-    required: [true, 'Description is required']
+    required: [true, 'Description is required'],
+    trim: true
   },
   title_ar: {
     type: String,
     required: [true, 'Arabic title is required'],
     trim: true,
-    maxlength: [200, 'Title cannot exceed 200 characters']
+    maxlength: [200, 'Arabic title cannot exceed 200 characters']
   },
   description_ar: {
     type: String,
-    required: [true, 'Arabic description is required']
+    required: [true, 'Arabic description is required'],
+    trim: true
   },
-  section: {
+  type: {
     type: String,
-    required: [true, 'Section is required'],
-    enum: ['webinars-workshops', 'press-releases', 'announcements', 'events']
+    enum: {
+      values: ['webinar-workshop', 'event', 'press-release', 'announcement'],
+      message: 'Type must be webinar-workshop, event, press-release, or announcement'
+    },
+    required: [true, 'Type is required']
+  },
+  startDate: {
+    type: Date,
+    required: function() {
+      return this.type === 'event' || this.type === 'webinar-workshop';
+    }
+  },
+  endDate: {
+    type: Date,
+    validate: {
+      validator: function(v) {
+        if (this.type === 'event' && !v) return false;
+        if (v && this.startDate && v < this.startDate) return false;
+        return true;
+      },
+      message: 'End date must be after start date'
+    }
+  },
+  location: {
+    type: String,
+    required: function() {
+      return this.type === 'event';
+    }
   },
   imageId: {
-    type: String
-  },
-  pdfId: {
-    type: String
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'uploads.files'
   },
   video: {
-    type: String
+    type: String,
+    validate: {
+      validator: function(v) {
+        if (!v) return true;
+        return /^(https?\:\/\/)?(www\.)?(youtube\.com|youtu\.?be)\/.+$/.test(v);
+      },
+      message: 'Please provide a valid YouTube URL'
+    }
+  },
+  pdfId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'uploads.files'
+  },
+  isFeatured: {
+    type: Boolean,
+    default: false
   }
 }, { 
   timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  toJSON: {
+    virtuals: true,
+    transform: function(doc, ret) {
+      delete ret.__v;
+      return ret;
+    }
+  },
+  toObject: {
+    virtuals: true
+  }
 });
-// Add virtuals
-schema.virtual('imageUrl').get(function() {
+
+// Virtuals for file URLs
+newsEventSchema.virtual('imageUrl').get(function() {
   return this.imageId ? `/api/files/${this.imageId}` : null;
 });
 
-schema.virtual('pdfUrl').get(function() {
+newsEventSchema.virtual('pdfUrl').get(function() {
   return this.pdfId ? `/api/files/${this.pdfId}` : null;
 });
 
-// Add indexes
-schema.index({ section: 1 });
-schema.index({ createdAt: -1 });
+// Indexes for better query performance
+newsEventSchema.index({ type: 1 });
+newsEventSchema.index({ startDate: -1 });
+newsEventSchema.index({ isFeatured: 1 });
 
-module.exports = mongoose.model('NewsEvent', schema);
+module.exports = mongoose.model('NewsEvent', newsEventSchema);

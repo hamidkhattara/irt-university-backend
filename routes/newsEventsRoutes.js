@@ -1,35 +1,49 @@
 const express = require('express');
 const router = express.Router();
 const { upload, handleUploadErrors } = require('../middlewares/upload');
-const { 
-  createNewsEvent, 
-  getNewsEventsBySection,
-  updateNewsEvent, 
-  deleteNewsEvent 
+const {
+  getWebinarsWorkshops,
+  getEvents,
+  getPressReleases,
+  getAnnouncements,
+  createNewsEvent,
+  updateNewsEvent,
+  deleteNewsEvent,
+  getFeaturedNewsEvents
 } = require('../controllers/newsEventsController');
 
-router.post('/', 
-  upload.fields([
-    { name: 'image', maxCount: 1 },
-    { name: 'pdf', maxCount: 1 }
-  ]),
+// Get all webinars and workshops
+router.get('/webinars-workshops', getWebinarsWorkshops);
+
+// Get all events
+router.get('/events', getEvents);
+
+// Get all press releases
+router.get('/press-releases', getPressReleases);
+
+// Get all announcements
+router.get('/announcements', getAnnouncements);
+
+// Get featured news and events
+router.get('/featured', getFeaturedNewsEvents);
+
+// Create new news/event
+router.post(
+  '/', 
+  upload.fields([{ name: 'image', maxCount: 1 }, { name: 'pdf', maxCount: 1 }]),
   handleUploadErrors,
   createNewsEvent
 );
 
-router.get('/:section', getNewsEventsBySection);
-
-
-
-// Keep existing routes
-router.put('/:id', 
-  upload.fields([
-    { name: 'image', maxCount: 1 },
-    { name: 'pdf', maxCount: 1 }
-  ]),
+// Update news/event
+router.put(
+  '/:id', 
+  upload.fields([{ name: 'image', maxCount: 1 }, { name: 'pdf', maxCount: 1 }]),
   handleUploadErrors,
   updateNewsEvent
 );
-router.delete('/:id',deleteNewsEvent);
+
+// Delete news/event
+router.delete('/:id', deleteNewsEvent);
 
 module.exports = router;
