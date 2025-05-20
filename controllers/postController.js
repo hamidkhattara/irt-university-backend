@@ -7,11 +7,19 @@ exports.getPostsByPageAndSection = async (req, res) => {
     const { page, section } = req.query;
     const baseUrl = `${req.protocol}://${req.get('host')}/api/files/`;
 
+    // Validate page and section if provided
+    const validPages = ['research', 'programs', 'news'];
+    if (page && !validPages.includes(page)) {
+      return res.status(400).json({ error: 'Invalid page parameter' });
+    }
+
     const query = {};
     if (page) query.page = page;
     if (section) query.section = section;
 
-    const posts = await Post.find(query).sort({ createdAt: -1 }).lean();
+    const posts = await Post.find(query)
+      .sort({ createdAt: -1 })
+      .lean();
 
     const postsWithUrls = posts.map(post => ({
       ...post,
@@ -22,10 +30,12 @@ exports.getPostsByPageAndSection = async (req, res) => {
     res.status(200).json(postsWithUrls);
   } catch (err) {
     console.error('Error fetching posts:', err);
-    res.status(500).json({ error: 'Failed to fetch posts' });
+    res.status(500).json({ 
+      error: 'Failed to fetch posts',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 };
-
 exports.createPost = async (req, res) => {
   try {
     const { title, content, title_ar, content_ar, page, section, video } = req.body;
