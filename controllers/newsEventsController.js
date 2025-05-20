@@ -1,3 +1,7 @@
+const ALLOWED_SECTIONS = {
+  NEWS_EVENTS: ['webinars-workshops', 'press-releases', 'announcements', 'events']
+};
+
 exports.createNewsEvent = async (req, res) => {
   try {
     const { title, description, title_ar, description_ar, section, video } = req.body;
@@ -55,7 +59,6 @@ exports.getNewsEventsBySection = async (req, res) => {
   }
 };
 
-
 exports.updateNewsEvent = async (req, res) => {
   try {
     const { id } = req.params;
@@ -63,8 +66,7 @@ exports.updateNewsEvent = async (req, res) => {
     const imageId = req.files['image'] ? req.files['image'][0].id : null;
     const pdfId = req.files['pdf'] ? req.files['pdf'][0].id : null;
 
-    const allowedSections = ['webinars-workshops', 'press-releases', 'announcements', 'events'];
-    if (section && !allowedSections.includes(section)) {
+    if (section && !ALLOWED_SECTIONS.NEWS_EVENTS.includes(section)) {
       return res.status(400).json({ error: 'Invalid section provided' });
     }
 
