@@ -93,3 +93,29 @@ exports.deleteResearch = async (req, res) => {
     res.status(500).json({ error: 'Failed to delete research' });
   }
 };
+
+// Add this to researchController.js
+exports.getResearchBySection = async (req, res) => {
+  try {
+    const { section } = req.params;
+    const baseUrl = `${req.protocol}://${req.get('host')}/api/files/`;
+
+    const allowedSections = ['latest-publications', 'ongoing-projects', 'collaborations-partnerships'];
+    if (!allowedSections.includes(section)) {
+      return res.status(400).json({ error: 'Invalid section provided' });
+    }
+
+    const researchPosts = await Research.find({ section }).sort({ createdAt: -1 });
+    
+    const researchWithUrls = researchPosts.map(research => ({
+      ...research.toObject(),
+      imageUrl: research.imageId ? `${baseUrl}${research.imageId}` : null,
+      pdfUrl: research.pdfId ? `${baseUrl}${research.pdfId}` : null,
+    }));
+
+    res.status(200).json(researchWithUrls);
+  } catch (err) {
+    console.error('Error fetching research by section:', err);
+    res.status(500).json({ error: 'Failed to fetch research posts by section' });
+  }
+};
