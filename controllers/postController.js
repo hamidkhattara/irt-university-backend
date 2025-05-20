@@ -33,6 +33,9 @@ exports.createPost = async (req, res) => {
     const pdfId = req.files?.pdf?.[0]?.id || null;
 
     if (!imageId && !video) {
+      // Clean up uploaded files if validation fails
+      if (req.files?.image?.[0]?.id) await deleteFileFromGridFS(req.files.image[0].id);
+      if (req.files?.pdf?.[0]?.id) await deleteFileFromGridFS(req.files.pdf[0].id);
       return res.status(400).json({ error: 'Please provide either an image or a video.' });
     }
 
@@ -41,7 +44,10 @@ exports.createPost = async (req, res) => {
     });
 
     const savedPost = await newPost.save();
-    res.status(201).json(savedPost);
+    res.status(201).json({
+      message: 'Post created successfully',
+      post: savedPost
+    });
   } catch (err) {
     console.error('Error creating post:', err);
     res.status(500).json({ error: 'Failed to create post' });
