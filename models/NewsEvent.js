@@ -8,13 +8,39 @@ const schema = new mongoose.Schema({
     trim: true,
     maxlength: [200, 'Title cannot exceed 200 characters']
   },
-  // ... other fields with same validation as Post.js ...
+  description: {
+    type: String,
+    required: [true, 'Description is required']
+  },
+  title_ar: {
+    type: String,
+    required: [true, 'Arabic title is required'],
+    trim: true,
+    maxlength: [200, 'Title cannot exceed 200 characters']
+  },
+  description_ar: {
+    type: String,
+    required: [true, 'Arabic description is required']
+  },
+  section: {
+    type: String,
+    required: [true, 'Section is required'],
+    enum: ['webinars-workshops', 'press-releases', 'announcements', 'events']
+  },
+  imageId: {
+    type: String
+  },
+  pdfId: {
+    type: String
+  },
+  video: {
+    type: String
+  }
 }, { 
   timestamps: true,
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
 });
-
 // Add virtuals
 schema.virtual('imageUrl').get(function() {
   return this.imageId ? `/api/files/${this.imageId}` : null;
