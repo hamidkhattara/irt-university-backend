@@ -1,36 +1,37 @@
 const express = require('express');
 const router = express.Router();
 const { upload, handleUploadErrors } = require('../middlewares/upload');
-const { 
-  createResearch, 
+const {
+  createResearch,
   getAllResearch,
-  getResearchBySection, // Add this import
-  updateResearch, 
-  deleteResearch 
+  getResearchBySection,
+  updateResearch,
+  deleteResearch
 } = require('../controllers/researchController');
 
-router.post('/', 
-  upload.fields([
-    { name: 'image', maxCount: 1 },
-    { name: 'pdf', maxCount: 1 }
-  ]),
+// Create new research
+router.post(
+  '/', 
+  upload.fields([{ name: 'image', maxCount: 1 }, { name: 'pdf', maxCount: 1 }]),
   handleUploadErrors,
   createResearch
 );
 
-// Add this route for section-based fetching
+// Get all research
+router.get('/', getAllResearch);
+
+// Get research by section
 router.get('/:section', getResearchBySection);
 
-// Keep existing routes
-router.get('/', getAllResearch);
-router.put('/:id', 
-  upload.fields([
-    { name: 'image', maxCount: 1 },
-    { name: 'pdf', maxCount: 1 }
-  ]),
+// Update research
+router.put(
+  '/:id', 
+  upload.fields([{ name: 'image', maxCount: 1 }, { name: 'pdf', maxCount: 1 }]),
   handleUploadErrors,
   updateResearch
 );
+
+// Delete research
 router.delete('/:id', deleteResearch);
 
 module.exports = router;
