@@ -227,36 +227,5 @@ router.delete('/:id', async (req, res) => {
     });
   }
 });
-// Get single post by ID
-router.get('/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: 'Invalid post ID' });
-    }
-
-    const post = await Post.findById(id).lean();
-    if (!post) {
-      return res.status(404).json({ error: 'Post not found' });
-    }
-
-    // Generate proper URLs
-    const baseUrl = `${req.protocol}://${req.get('host')}/api/files/`;
-    const postWithUrls = {
-      ...post,
-      imageUrl: post.imageId ? `${baseUrl}${post.imageId}` : null,
-      pdfUrl: post.pdfId ? `${baseUrl}${post.pdfId}` : null
-    };
-
-    res.json(postWithUrls);
-  } catch (err) {
-    console.error('Error fetching post:', err);
-    res.status(500).json({ 
-      error: 'Failed to fetch post',
-      details: process.env.NODE_ENV === 'development' ? err.message : undefined
-    });
-  }
-});
 
 module.exports = router;
