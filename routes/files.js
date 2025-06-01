@@ -88,52 +88,50 @@ router.get('/:id', async (req, res) => {
     const file = files[0];
     console.log(`Serving file: ${file.filename} (${file.contentType})`);
 
-    // Set CORS headers to allow all origins (adjust as needed for production)
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
     // Base headers for all files
-    const headers = {
-      'Content-Type': file.contentType || 'application/octet-stream',
-      'Content-Length': file.length,
-      'Cache-Control': 'public, max-age=31536000',
-      'Accept-Ranges': 'bytes',
-      'Cross-Origin-Resource-Policy': 'cross-origin'
-    };
+ // Base headers for all files
+const headers = {
+  'Content-Type': file.contentType || 'application/octet-stream',
+  'Content-Length': file.length,
+  'Cache-Control': 'public, max-age=31536000',
+  'Accept-Ranges': 'bytes'
+};
 
-    // Custom for PDFs
-    if (file.contentType === 'application/pdf') {
-      headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
-      headers['Content-Security-Policy'] = "frame-ancestors 'self' https://*.vercel.app http://localhost:* https://irt-university-backend.onrender.com";
-      headers['X-Content-Type-Options'] = 'nosniff';
-      headers['Cross-Origin-Embedder-Policy'] = 'unsafe-none';
-    }
-    // Images
-    else if (file.contentType.startsWith('image/')) {
-      headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
-      headers['Content-Security-Policy'] = "default-src 'self'; img-src 'self' data: https:;";
-    }
-    // Default for other files
-    else {
-      headers['Content-Disposition'] = `attachment; filename="${encodeURIComponent(file.filename)}"`;
-    }
+// Custom for PDFs
+if (file.contentType === 'application/pdf') {
+  headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
+  headers['Content-Security-Policy'] = "frame-ancestors 'self' https://*.vercel.app http://localhost:* https://irt-university-backend.onrender.com";
+  headers['X-Content-Type-Options'] = 'nosniff';
+  headers['Cross-Origin-Resource-Policy'] = 'cross-origin';
+  headers['Cross-Origin-Embedder-Policy'] = 'unsafe-none'; // Required for PDF.js in some cases
+}
 
-    res.set(headers);
+// Images
+else if (file.contentType.startsWith('image/')) {
+  headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
+}
 
-    // Stream the file
-    const downloadStream = bucket.openDownloadStream(fileId);
+// Default for other files
+else {
+  headers['Content-Disposition'] = `attachment; filename="${encodeURIComponent(file.filename)}"`;
+}
 
-    downloadStream.on('error', (error) => {
-      console.error('Stream error:', error);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'File streaming failed' });
-      }
-    });
+res.set(headers);
 
-    downloadStream.pipe(res);
+// Stream the file
+const downloadStream = bucket.openDownloadStream(fileId);
 
-  } catch (error) { 
+downloadStream.on('error', (error) => {
+  console.error('Stream error:', error);
+  if (!res.headersSent) {
+    res.status(500).json({ error: 'File streaming failed' });
+  }
+});
+
+downloadStream.pipe(res);
+
+
+  } catch (error) {
     console.error('File serving error:', error);
     res.status(500).json({ 
       error: 'Server error',
