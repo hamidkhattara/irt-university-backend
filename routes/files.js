@@ -131,7 +131,7 @@ downloadStream.on('error', (error) => {
 downloadStream.pipe(res);
 
 
-  } catch (error) {
+  } catch (error) { 
     console.error('File serving error:', error);
     res.status(500).json({ 
       error: 'Server error',

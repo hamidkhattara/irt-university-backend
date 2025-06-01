@@ -143,4 +143,4 @@ exports.deletePost = async (req, res) => {
     console.error('Error deleting post:', err);
     res.status(500).json({ error: 'Failed to delete post' });
   }
-};
+}; 
