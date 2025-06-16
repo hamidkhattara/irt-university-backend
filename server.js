@@ -38,7 +38,8 @@ async function startServer() {
     const allowedOrigins = [
       "https://irt-university-frontend.vercel.app",
       "http://localhost:3000",
-      "https://irt-university-backend.onrender.com"
+      "https://irt-university-backend.onrender.com",
+      "https://www.irt-dz.org" // ADDED: Your custom frontend domain
     ];
 
     app.use((req, res, next) => {
@@ -47,7 +48,8 @@ async function startServer() {
         "'self'",
         "https://irt-university-frontend.vercel.app",
         "http://localhost:3000",
-        "https://irt-university-backend.onrender.com"
+        "https://irt-university-backend.onrender.com",
+        "https://www.irt-dz.org" // ADDED: Your custom frontend domain for CSP
       ];
     
       // Match preview domains like https://irt-university-frontend-abc123.vercel.app
@@ -122,7 +124,7 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/files/')) {
     res.setHeader(
       "Content-Security-Policy",
-      "frame-ancestors 'self' https://irt-university-frontend.vercel.app https://irt-university-frontend-*.vercel.app http://localhost:3000 https://irt-university-backend.onrender.com; " +
+      "frame-ancestors 'self' https://irt-university-frontend.vercel.app https://irt-university-frontend-*.vercel.app http://localhost:3000 https://irt-university-backend.onrender.com https://www.irt-dz.org; " + // ADDED: Custom domain
       "object-src 'self' blob: data:;"
     );
     res.removeHeader("X-Frame-Options"); // Remove conflicting header
