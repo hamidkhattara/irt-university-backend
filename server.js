@@ -34,9 +34,9 @@ async function startServer() {
     app.set("trust proxy", 1);
 
     // ====================== SECURITY CONFIGURATION ======================
+    // Define explicitly allowed origins for CORS and CSP frame-ancestors
     const allowedOrigins = [
       "https://irt-university-frontend.vercel.app",
-      "https://irt-university-frontend-*.vercel.app",
       "http://localhost:3000",
       "https://irt-university-backend.onrender.com"
     ];
@@ -51,7 +51,8 @@ async function startServer() {
       ];
     
       // Match preview domains like https://irt-university-frontend-abc123.vercel.app
-      if (/^https:\/\/irt-university-frontend-[\w-]+\.vercel\.app$/.test(origin)) {
+      // Updated regex to be more robust for various Vercel preview URLs
+      if (/^https:\/\/irt-university-frontend(?:-[\w.-]+)?\.vercel\.app$/.test(origin)) {
         baseDomains.push(origin);
       }
     
@@ -90,8 +91,10 @@ async function startServer() {
       origin: (origin, callback) => {
         if (!origin) return callback(null, true);
     
+        // Check if origin is in the explicitly allowed list
         const isAllowed = allowedOrigins.some((domain) => origin === domain) ||
-          /^https:\/\/irt-university-frontend-[\w-]+\.vercel\.app$/.test(origin);
+                          // Check against the more robust regex for Vercel preview domains
+                          /^https:\/\/irt-university-frontend(?:-[\w.-]+)?\.vercel\.app$/.test(origin);
     
         callback(isAllowed ? null : new Error("Not allowed by CORS"), isAllowed);
       },
@@ -287,4 +290,4 @@ app.use((req, res, next) => {
   }
 }
 
-startServer(); 
+startServer();
