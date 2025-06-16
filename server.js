@@ -1,4 +1,3 @@
-// Filename: hamidkhattara/irt-university-backend/irt-university-backend-8cffbd5d91c9ebbd3d037c6ef9c441ae32f6a63a/server.js
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -121,10 +120,23 @@ async function startServer() {
     app.options("*", cors(corsOptions));
 
 
-// REMOVED: The duplicate app.use block that explicitly set Content-Security-Policy for /api/files/
-// This was causing the conflicting frame-ancestors directive.
+// THIS BLOCK HAS BEEN REMOVED:
+// The duplicate app.use block that explicitly set Content-Security-Policy for /api/files/
+// was causing the conflicting frame-ancestors directive by overwriting Helmet.
 // Helmet middleware (above) now handles CSP for file routes using the comprehensive baseDomains.
-
+/*
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/files/')) {
+    res.setHeader(
+      "Content-Security-Policy",
+      "frame-ancestors 'self' https://irt-university-frontend.vercel.app https://irt-university-frontend-*.vercel.app http://localhost:3000 https://irt-university-backend.onrender.com https://www.irt-dz.org; " +
+      "object-src 'self' blob: data:;"
+    );
+    res.removeHeader("X-Frame-Options");
+  }
+  next();
+});;
+*/
     // ====================== BODY PARSING ======================
     app.use(express.json({ 
       limit: "50mb",
