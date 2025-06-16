@@ -39,17 +39,18 @@ async function startServer() {
       "https://irt-university-frontend.vercel.app",
       "http://localhost:3000",
       "https://irt-university-backend.onrender.com",
-      "https://www.irt-dz.org" // ADDED: Your custom frontend domain
+      "https://www.irt-dz.org" // Added: Your custom frontend domain for CORS
     ];
 
     app.use((req, res, next) => {
       const origin = req.get("origin") || "";
+      // baseDomains array is used by Helmet's frame-ancestors directive
       const baseDomains = [
         "'self'",
         "https://irt-university-frontend.vercel.app",
         "http://localhost:3000",
         "https://irt-university-backend.onrender.com",
-        "https://www.irt-dz.org" // ADDED: Your custom frontend domain for CSP
+        "https://www.irt-dz.org" // Added: Your custom frontend domain for Helmet's frame-ancestors
       ];
     
       // Match preview domains like https://irt-university-frontend-abc123.vercel.app
@@ -119,12 +120,15 @@ async function startServer() {
     app.options("*", cors(corsOptions));
 
 
-// Add this right after your CORS middleware
+// This separate app.use block also sets CSP headers for file routes.
+// It explicitly sets "frame-ancestors" and "object-src".
+// Ensure this matches or complements the Helmet configuration if Helmet is used for general CSP.
+// The critical fix here is to add the custom domain to the frame-ancestors.
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/files/')) {
     res.setHeader(
       "Content-Security-Policy",
-      "frame-ancestors 'self' https://irt-university-frontend.vercel.app https://irt-university-frontend-*.vercel.app http://localhost:3000 https://irt-university-backend.onrender.com https://www.irt-dz.org; " + // ADDED: Custom domain
+      "frame-ancestors 'self' https://irt-university-frontend.vercel.app https://irt-university-frontend-*.vercel.app http://localhost:3000 https://irt-university-backend.onrender.com https://www.irt-dz.org; " + // ADDED: Your custom domain
       "object-src 'self' blob: data:;"
     );
     res.removeHeader("X-Frame-Options"); // Remove conflicting header
