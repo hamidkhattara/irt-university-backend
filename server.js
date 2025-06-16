@@ -64,8 +64,8 @@ async function startServer() {
           contentSecurityPolicy: {
             directives: {
               ...getDefaultDirectives(),
-              "frame-ancestors": baseDomains,
-              "object-src": ["'self'", "blob:"]
+              "frame-ancestors": baseDomains, // This uses the comprehensive baseDomains
+              "object-src": ["'self'", "blob:"] // This correctly allows blob and self for objects
             }
           },
           crossOriginEmbedderPolicy: false,
@@ -120,21 +120,10 @@ async function startServer() {
     app.options("*", cors(corsOptions));
 
 
-// This separate app.use block also sets CSP headers for file routes.
-// It explicitly sets "frame-ancestors" and "object-src".
-// Ensure this matches or complements the Helmet configuration if Helmet is used for general CSP.
-// The critical fix here is to add the custom domain to the frame-ancestors.
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api/files/')) {
-    res.setHeader(
-      "Content-Security-Policy",
-      "frame-ancestors 'self' https://irt-university-frontend.vercel.app https://irt-university-frontend-*.vercel.app http://localhost:3000 https://irt-university-backend.onrender.com https://www.irt-dz.org; " + // ADDED: Your custom domain
-      "object-src 'self' blob: data:;"
-    );
-    res.removeHeader("X-Frame-Options"); // Remove conflicting header
-  }
-  next();
-});;
+// REMOVED: The duplicate app.use block that explicitly set Content-Security-Policy for /api/files/
+// This was causing the conflicting frame-ancestors directive.
+// Helmet middleware (above) now handles CSP for file routes using the comprehensive baseDomains.
+
     // ====================== BODY PARSING ======================
     app.use(express.json({ 
       limit: "50mb",
