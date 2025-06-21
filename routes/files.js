@@ -89,46 +89,46 @@ router.get('/:id', async (req, res) => {
     console.log(`Serving file: ${file.filename} (${file.contentType})`);
 
     // Base headers for all files
- // Base headers for all files
-const headers = {
-  'Content-Type': file.contentType || 'application/octet-stream',
-  'Content-Length': file.length,
-  'Cache-Control': 'public, max-age=31536000',
-  'Accept-Ranges': 'bytes'
-};
+    const headers = {
+      'Content-Type': file.contentType || 'application/octet-stream',
+      'Content-Length': file.length,
+      'Cache-Control': 'public, max-age=31536000',
+      'Accept-Ranges': 'bytes'
+    };
 
-// Custom for PDFs
-if (file.contentType === 'application/pdf') {
-  headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
-  headers['Content-Security-Policy'] = "frame-ancestors 'self' https://*.vercel.app http://localhost:* https://irt-university-backend.onrender.com";
-  headers['X-Content-Type-Options'] = 'nosniff';
-  headers['Cross-Origin-Resource-Policy'] = 'cross-origin';
-  headers['Cross-Origin-Embedder-Policy'] = 'unsafe-none'; // Required for PDF.js in some cases
-}
+    // Custom for PDFs
+    if (file.contentType === 'application/pdf') {
+      headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
+      // REMOVED: The problematic Content-Security-Policy header explicitly set here.
+      // Helmet in server.js will now handle the CSP correctly for all files.
+      headers['X-Content-Type-Options'] = 'nosniff';
+      headers['Cross-Origin-Resource-Policy'] = 'cross-origin';
+      headers['Cross-Origin-Embedder-Policy'] = 'unsafe-none'; // Required for PDF.js in some cases
+    }
 
-// Images
-else if (file.contentType.startsWith('image/')) {
-  headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
-}
+    // Images
+    else if (file.contentType.startsWith('image/')) {
+      headers['Content-Disposition'] = `inline; filename="${encodeURIComponent(file.filename)}"`;
+    }
 
-// Default for other files
-else {
-  headers['Content-Disposition'] = `attachment; filename="${encodeURIComponent(file.filename)}"`;
-}
+    // Default for other files
+    else {
+      headers['Content-Disposition'] = `attachment; filename="${encodeURIComponent(file.filename)}"`;
+    }
 
-res.set(headers);
+    res.set(headers);
 
-// Stream the file
-const downloadStream = bucket.openDownloadStream(fileId);
+    // Stream the file
+    const downloadStream = bucket.openDownloadStream(fileId);
 
-downloadStream.on('error', (error) => {
-  console.error('Stream error:', error);
-  if (!res.headersSent) {
-    res.status(500).json({ error: 'File streaming failed' });
-  }
-});
+    downloadStream.on('error', (error) => {
+      console.error('Stream error:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'File streaming failed' });
+      }
+    });
 
-downloadStream.pipe(res);
+    downloadStream.pipe(res);
 
 
   } catch (error) {
