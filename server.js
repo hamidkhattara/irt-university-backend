@@ -34,38 +34,85 @@ async function startServer() {
     app.set("trust proxy", 1);
 
     // ====================== SECURITY CONFIGURATION ======================
-    // Define explicitly allowed origins for CORS and CSP frame-ancestors
+    // Dynamically build allowedOrigins for CORS and CSP frame-ancestors
+    // This ensures your backend uses the FRONTEND_URL and ADMIN_URL from your .env file
     const allowedOrigins = [
-      "https://irt-university-frontend.vercel.app",
-      "http://localhost:3000",
-      "https://irt-university-backend.onrender.com",
-      "https://www.irt-dz.org" // Added: Your custom frontend domain for CORS
-    ];
+      "http://localhost:3000", // Always allow localhost for local development
+      process.env.FRONTEND_URL, // Use the value from .env
+      process.env.ADMIN_URL,    // Use the admin URL from .env if it's different and needs CORS access
+      process.env.DOMAIN      // Allow the backend itself as an origin if needed (e.g., for health checks)
+    ].filter(Boolean); // Filter out any undefined/null values if env vars are not set
+
+    // Also, dynamically build baseDomains for Helmet's CSP frame-ancestors
+    const baseDomains = [
+      "'self'",
+      "http://localhost:3000", // Allow localhost
+      process.env.FRONTEND_URL, // Your main frontend URL
+      process.env.ADMIN_URL,    // Your admin frontend URL
+      process.env.DOMAIN        // Your backend domain
+    ].filter(Boolean); // Filter out any undefined/null values
+
+    // Add regex for Vercel preview domains and handle www/non-www for FRONTEND_URL dynamically
+    if (process.env.NODE_ENV === 'production') {
+      const vercelPreviewRegex = /^https:\/\/irt-university-frontend(?:-[\w.-]+)?\.vercel\.app$/;
+      // Add Vercel preview regex to allowedOrigins for CORS
+      if (!allowedOrigins.some(origin => origin instanceof RegExp && origin.source === vercelPreviewRegex.source)) {
+        allowedOrigins.push(vercelPreviewRegex);
+      }
+      // Add Vercel preview regex to baseDomains for CSP
+      if (!baseDomains.some(domain => domain instanceof RegExp && domain.source === vercelPreviewRegex.source)) {
+        baseDomains.push(vercelPreviewRegex);
+      }
+
+      // --- NEW LOGIC TO HANDLE WWW/NON-WWW VARIANTS OF FRONTEND_URL ---
+      if (process.env.FRONTEND_URL) {
+        try {
+          const parsedUrl = new URL(process.env.FRONTEND_URL);
+          let hostname = parsedUrl.hostname;
+
+          // Remove 'www.' if present to get the root domain
+          if (hostname.startsWith('www.')) {
+            hostname = hostname.substring(4);
+          }
+
+          const nonWwwUrl = `${parsedUrl.protocol}//${hostname}`;
+          const wwwUrl = `${parsedUrl.protocol}//www.${hostname}`;
+
+          // Add non-www if not already present in allowedOrigins
+          if (!allowedOrigins.includes(nonWwwUrl)) {
+            allowedOrigins.push(nonWwwUrl);
+          }
+          // Add www if not already present in allowedOrigins
+          if (!allowedOrigins.includes(wwwUrl)) {
+            allowedOrigins.push(wwwUrl);
+          }
+
+          // Also add to baseDomains for CSP
+          if (!baseDomains.includes(nonWwwUrl)) {
+            baseDomains.push(nonWwwUrl);
+          }
+          if (!baseDomains.includes(wwwUrl)) {
+            baseDomains.push(wwwUrl);
+          }
+
+        } catch (e) {
+          console.error("Error parsing FRONTEND_URL for www/non-www variants:", e.message);
+        }
+      }
+      // --- END NEW LOGIC ---
+    }
 
     app.use((req, res, next) => {
       const origin = req.get("origin") || "";
-      // baseDomains array is used by Helmet's frame-ancestors directive
-      const baseDomains = [
-        "'self'",
-        "https://irt-university-frontend.vercel.app",
-        "http://localhost:3000",
-        "https://irt-university-backend.onrender.com",
-        "https://www.irt-dz.org" // Added: Your custom frontend domain for Helmet's frame-ancestors
-      ];
-    
-      // Match preview domains like https://irt-university-frontend-abc123.vercel.app
-      // Updated regex to be more robust for various Vercel preview URLs
-      if (/^https:\/\/irt-university-frontend(?:-[\w.-]+)?\.vercel\.app$/.test(origin)) {
-        baseDomains.push(origin);
-      }
-    
+      
+      // Helmet middleware for CSP
       if (req.path.startsWith("/api/files/")) {
         helmet({
           contentSecurityPolicy: {
             directives: {
               ...getDefaultDirectives(),
-              "frame-ancestors": baseDomains, // This uses the comprehensive baseDomains
-              "object-src": ["'self'", "blob:"] // This correctly allows blob and self for objects
+              "frame-ancestors": baseDomains, // This uses the dynamic baseDomains here
+              "object-src": ["'self'", "blob:"]
             }
           },
           crossOriginEmbedderPolicy: false,
@@ -94,10 +141,13 @@ async function startServer() {
       origin: (origin, callback) => {
         if (!origin) return callback(null, true);
     
-        // Check if origin is in the explicitly allowed list
-        const isAllowed = allowedOrigins.some((domain) => origin === domain) ||
-                          // Check against the more robust regex for Vercel preview domains
-                          /^https:\/\/irt-university-frontend(?:-[\w.-]+)?\.vercel\.app$/.test(origin);
+        // Check if origin is in the dynamically built allowedOrigins array or matches a regex in it
+        const isAllowed = allowedOrigins.some((allowedOrigin) => {
+          if (allowedOrigin instanceof RegExp) {
+            return allowedOrigin.test(origin);
+          }
+          return origin === allowedOrigin;
+        });
     
         callback(isAllowed ? null : new Error("Not allowed by CORS"), isAllowed);
       },
@@ -120,10 +170,7 @@ async function startServer() {
     app.options("*", cors(corsOptions));
 
 
-// THIS BLOCK HAS BEEN REMOVED:
-// The duplicate app.use block that explicitly set Content-Security-Policy for /api/files/
-// was causing the conflicting frame-ancestors directive by overwriting Helmet.
-// Helmet middleware (above) now handles CSP for file routes using the comprehensive baseDomains.
+// THIS BLOCK HAS BEEN REMOVED: (as previously discussed, it was conflicting)
 /*
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/files/')) {
@@ -197,7 +244,7 @@ app.use((req, res, next) => {
           database: "connected",
           uptime: process.uptime(),
           environment: process.env.NODE_ENV || 'development',
-          allowedOrigins: allowedOrigins
+          allowedOrigins: allowedOrigins // This will now show the correct dynamic list
         });
       } catch (err) {
         res.status(503).json({
